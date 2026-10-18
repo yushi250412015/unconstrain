@@ -191,7 +191,7 @@ def diagnose(df: pd.DataFrame, *, sales="sales", series="series", date="date",
 
 def decensor(df: pd.DataFrame, *, sales="sales", series="series", date="date",
              stockout=None, severity=None, stock_hours=None, open_hours=16,
-             method="tobit", strength=1.0, complete: bool = False) -> pd.DataFrame:
+             method="auto", strength=1.0, complete: bool = False) -> pd.DataFrame:
     """Return the table with a ``demand_hat`` column.
 
     ``method`` is one of ``tobit``, ``nb``, ``km``, ``interp``, ``mean``; the
@@ -212,8 +212,18 @@ def decensor(df: pd.DataFrame, *, sales="sales", series="series", date="date",
     obs, mask, sev = panel.observed, panel.mask, panel.severity
     base = fill_gaps(panel.values, obs)          # model input only
     soft = {"tobit": "tobit_s", "nb": "nb_s", "km": "km_s"}
-    use = (soft.get(method, method)
-           if (sev is not None and np.any(sev > 0)) else method)
+    if method == "auto":
+        # the ladder decides: severity if we have it, a damped hard correction
+        # if we only have a flag, interpolation if we have nothing
+        if sev is not None and np.any(sev > 0):
+            use = "tobit_s"  # keep the caller's strength
+        elif mask.any():
+            use, strength = "tobit", min(strength, 0.4)
+        else:
+            use = "interp"
+    else:
+        use = (soft.get(method, method)
+               if (sev is not None and np.any(sev > 0)) else method)
     rec = reconstruct(base, mask, use, severity=sev)
     if strength != 1.0:
         rec = base + float(strength) * (rec - base)

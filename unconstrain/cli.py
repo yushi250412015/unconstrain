@@ -158,8 +158,8 @@ def main(argv=None) -> int:
     c.add_argument("file")
     _add_cols(c)
     c.add_argument("-o", "--out", required=True)
-    c.add_argument("--method", default="tobit",
-                   choices=["tobit", "nb", "km", "interp", "mean"])
+    c.add_argument("--method", default="auto",
+                   choices=["auto", "tobit", "nb", "km", "interp", "mean"])
     c.add_argument("--strength", type=float, default=1.0,
                    help="blend 0 (raw sales) .. 1 (full correction); use ~0.4 "
                         "when you only have a binary flag")
