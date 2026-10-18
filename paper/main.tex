@@ -141,13 +141,32 @@ twenty points are daily demand noise, not information about the level.
 \textbf{What the bound costs, in WAPE.} Simulated against the same demand
 process (negative-binomial, 3{,}000 series, a known weekday structure), a random
 7\% level error---the size of the Cram\'er--Rao floor---raises WAPE by 1.0\% of
-its own value: $0.2$ points at the benchmark's 20.5. The spread between the best
-and the worst honest method is 1.1 points. \emph{At most a fifth of what the
-literature competes on is level information; four fifths is reconstruction
-artifact.} The correlation of $0.94$ between $|\text{bias}|$ and WAPE is real but
-confounded: rescaling the naive pipeline's forecasts by 1.076 removes its entire
-$-7.5\%$ bias and recovers 0.3 of a 2.1-point gap, because the remaining error
-comes from a corrupted \emph{history}, not a corrupted level.
+its own value: $0.2$ points at the benchmark's 20.5.
+
+A bound that does not depend on the simulation gives the same answer. Write $c$
+for the conditional coefficient of variation of daily demand (measured here:
+median $0.32$) and $\delta$ for the relative standard error of the level. The
+forecast-error variance decomposes exactly as
+\begin{equation}
+\mathrm{Var}(D)=\underbrace{\E[\mathrm{Var}(D\mid\mu)]}_{(c m)^2}
++\underbrace{\mathrm{Var}(m(\mu))}_{(\delta m)^2},
+\end{equation}
+and for a location--scale family the mean absolute deviation is proportional to
+the standard deviation, so
+\begin{equation}
+\frac{\mathrm{WAPE}(\delta)}{\mathrm{WAPE}(0)}-1\;\le\;
+\sqrt{1+(\delta/c)^2}-1 .
+\end{equation}
+At the floor ($\delta=0.07$, $c=0.32$) this is $+2.3\%$, or $0.5$ points at
+20.5. The simulation says 0.2, the bound says 0.5, the spread between the best and
+worst honest method is 1.1: \emph{either number leaves most of the spread
+unexplained by level information, so it is reconstruction artifact}. The bound is
+falsifiable in the useful direction---a method that beats the floor by more than
+half a point has either found information the censoring destroyed or is leaking
+the holdout. The correlation of $0.94$ between $|\text{bias}|$ and WAPE is real
+but confounded: rescaling the naive pipeline's forecasts by 1.076 removes its
+entire $-7.5\%$ bias and recovers 0.3 of a 2.1-point gap, because the remaining
+error comes from a corrupted \emph{history}, not a corrupted level.
 
 \textbf{The asymmetry is what should worry an operator.} A $-7\%$ level error
 costs nothing in L1 ($-0.13$ points: it moves predictions toward the median,

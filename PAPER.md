@@ -119,10 +119,25 @@ multiplier, and why this paper's tool spends its effort on the history.
 (negative-binomial, 3,000 series, a known weekday structure so that the base
 WAPE is realistic), a *random* 7% level error — the size of the Cramér–Rao floor
 — raises WAPE by 1.0% of its own value: **0.2 points at the benchmark's 20.5**.
-The spread between the best and the worst honest method is 1.1 points. **At most
-a fifth of what the literature competes on is level information; four fifths is
-reconstruction artifact.** No method can claim otherwise without showing which
-part of its gain came from the level, and none of the published ones does.
+
+There is also a bound that does not depend on the simulation. Write c for the
+conditional coefficient of variation of daily demand (measured on this panel:
+median **0.32**) and δ for the relative standard error of the level. The variance
+of a forecast error decomposes exactly as
+
+    Var(D) = E[Var(D | μ)] + Var(m(μ)) = (c·m)² + (δ·m)²,
+
+and for a location–scale family the mean absolute deviation is proportional to
+the standard deviation, so the ratio of WAPEs is bounded by the ratio of spreads:
+
+    WAPE(δ) / WAPE(0) − 1  ≤  sqrt(1 + (δ/c)²) − 1.
+
+At the floor (δ = 0.07, c = 0.32) this is **+2.3%, or 0.5 points at 20.5**. The
+simulation says 0.2; the bound says 0.5; the spread between the best and worst
+honest method is 1.1. **Either number leaves most of the spread unexplained by
+level information, so it is reconstruction artifact.** And the bound is
+falsifiable in the useful direction: a method that beats the floor by more than
+0.5 points has either found information the censoring destroyed or is leaking.
 
 **The asymmetry is the part that should worry an operator.** A −7% level error
 costs *nothing* in L1 — it moves predictions toward the median, which is where
