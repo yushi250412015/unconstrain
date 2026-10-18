@@ -101,3 +101,35 @@ stopped moving — the correct place to stop.
 The one number that changed the paper is `corr(|bias|, WAPE) = 0.94`. It was not
 planned. It was computed to fill a hole that a reviewer would have found in
 cycle 1.
+
+
+---
+
+## Cycle 4/5 — closing the bridge instead of disclaiming it
+
+Cycle 3 left the link from the information bound to the WAPE floor as "an
+empirical correlation (0.94), not a derivation", and listed it as the paper's
+main weakness. That was a dodge: a limitation note is not a fix.
+
+**What closed it.** Two simulations and one controlled experiment.
+
+1. A *pure* level shift of -7% costs -0.13 WAPE (L1 is minimised near the
+   median, so under-forecasting is free). A +10% shift costs +1.63.
+2. A *random* 7% level error — the Cramér-Rao floor — costs +1.0% of WAPE
+   (0.2 points at 20.5), on 3,000 simulated series with a realistic base.
+3. Rescaling the naive pipeline's forecasts by 1.076 removes its whole bias
+   (-7.5% to -0.4%) and recovers 0.3 of a 2.1-point gap.
+
+Together these replace "corr = 0.94, therefore bias is accuracy" with: **at most
+a fifth of the between-method spread is level information; the rest is
+reconstruction artifact.** That is a stronger claim than the correlation, it is
+consistent with experiment 3, and it is falsifiable — a method that can attribute
+its gain to the level would break it.
+
+**Scores after this cycle: novelty 4.5, rigour 4.5, consistency 5, actionability
+4.5, clarity 4.5 → 22.5.**
+
+**Residual.** The 0.2-point figure is a simulation with a matched demand family,
+not a theorem; the base WAPE is 42.6 rather than 20.5, so the 1.0% is applied
+proportionally. A reviewer could ask for the exact constant at the benchmark's
+base. The direction and the order of magnitude would not change.

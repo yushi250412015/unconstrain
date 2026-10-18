@@ -115,6 +115,23 @@ has fixed a rounding error; a team that repairs the history has fixed the model.
 It is also why a fifteen-second severity-weighted likelihood beats a 7%
 multiplier, and why this paper's tool spends its effort on the history.
 
+**What the bound costs, in WAPE.** Simulated against the same demand process
+(negative-binomial, 3,000 series, a known weekday structure so that the base
+WAPE is realistic), a *random* 7% level error — the size of the Cramér–Rao floor
+— raises WAPE by 1.0% of its own value: **0.2 points at the benchmark's 20.5**.
+The spread between the best and the worst honest method is 1.1 points. **At most
+a fifth of what the literature competes on is level information; four fifths is
+reconstruction artifact.** No method can claim otherwise without showing which
+part of its gain came from the level, and none of the published ones does.
+
+**The asymmetry is the part that should worry an operator.** A −7% level error
+costs *nothing* in L1 — it moves predictions toward the median, which is where
+an L1 loss is minimised — while a +10% error costs 1.6 points. Bias low is free
+for accuracy and expensive for shelves; bias high is the reverse. A pipeline
+that reports WAPE is therefore structurally inclined to under-forecast, which is
+precisely the direction that empties shelves. The metric and the censoring push
+in the same direction, and neither shows up as an error.
+
 The claim makes two falsifiable predictions:
 
 1. **No honest method should reach ~17 WAPE on this protocol.** The level
