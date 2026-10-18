@@ -35,7 +35,8 @@ a daily coefficient of variation of about 25\%, a 7\% level uncertainty is a
 minor term---which explains a pattern the field reports without explaining:
 eleven methods, spanning linear interpolation to ImputeFormer, differ by 35
 percentage points in bias but by only 1.1 in WAPE, and $|\text{bias}|$ alone
-accounts for 89\% of the between-method WAPE variance. Once the bias is
+correlates with 89\% of the between-method WAPE variance---a correlation
+that, on inspection, is not causal. Once the bias is
 corrected the error sits at a floor near 20 WAPE, and no method has gone below
 it. The decision layer is not bounded in the same way: ordering at the newsvendor
 quantile rather than the mean moves lost units by $18.7\times$, an order of
@@ -136,6 +137,23 @@ severity-weighted likelihood does, at $-0.3\%$---lands at 20.5 WAPE and stops
 there. A 325-second SAITS lands at 21.4 with $+2.1\%$ bias; ImputeFormer lands at
 20.4 with $+4.3\%$. The floor of the comparison is near 20.3, and the remaining
 twenty points are daily demand noise, not information about the level.
+
+\textbf{What the bound costs, in WAPE.} Simulated against the same demand
+process (negative-binomial, 3{,}000 series, a known weekday structure), a random
+7\% level error---the size of the Cram\'er--Rao floor---raises WAPE by 1.0\% of
+its own value: $0.2$ points at the benchmark's 20.5. The spread between the best
+and the worst honest method is 1.1 points. \emph{At most a fifth of what the
+literature competes on is level information; four fifths is reconstruction
+artifact.} The correlation of $0.94$ between $|\text{bias}|$ and WAPE is real but
+confounded: rescaling the naive pipeline's forecasts by 1.076 removes its entire
+$-7.5\%$ bias and recovers 0.3 of a 2.1-point gap, because the remaining error
+comes from a corrupted \emph{history}, not a corrupted level.
+
+\textbf{The asymmetry is what should worry an operator.} A $-7\%$ level error
+costs nothing in L1 ($-0.13$ points: it moves predictions toward the median,
+where L1 is minimised), while a $+10\%$ error costs 1.6. Biased low is free for
+accuracy and expensive for shelves. A pipeline that reports WAPE is structurally
+inclined to under-forecast, which is the direction that empties shelves.
 
 The claim makes two falsifiable predictions. (i) No honest method should reach
 about 17 WAPE on this protocol: the level carries at most a couple of points, and
