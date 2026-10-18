@@ -1,0 +1,26 @@
+# --- python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.eggs/
+.venv/
+venv/
+
+# --- project data (110 MB; download with the two curl commands in README) ---
+data/
+*.parquet
+*.csv
+!tests/fixtures/*.csv
+
+# --- generated artefacts ---
+results/*.png
+!results/.gitkeep
+*.zip
+
+# --- editors / os ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,269 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{microtype}
+\usepackage[round]{natbib}
+\usepackage[hidelinks]{hyperref}
+\usepackage{caption}
+\captionsetup{font=small,labelfont=bf}
+\graphicspath{{../results/}{figures/}{./}}
+
+\newcommand{\E}{\mathbb{E}}
+
+\title{\bfseries De-censoring Has a Ceiling, and It Is Low:\\
+an Information Bound for Censored Retail Demand}
+\author{Draft v3}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+\noindent
+Retail demand is censored by inventory, and a 2025--2026 literature on the
+FreshRetailNet-50K benchmark competes on forecast accuracy. We ask how much
+accuracy is available. A censored day does not carry a clean day's information,
+and we compute the shortfall exactly: at the benchmark's mean severity of 0.32,
+a censored day retains 22--58\% of a clean day's Fisher information, 90 days of
+data are worth about 68 (25\% destroyed), and the Cram\'er--Rao floor on the
+standard error of any unbiased per-SKU level estimate is a median 7.0\%. Against
+a daily coefficient of variation of about 25\%, a 7\% level uncertainty is a
+minor term---which explains a pattern the field reports without explaining:
+eleven methods, spanning linear interpolation to ImputeFormer, differ by 35
+percentage points in bias but by only 1.1 in WAPE, and $|\text{bias}|$ alone
+accounts for 89\% of the between-method WAPE variance. Once the bias is
+corrected the error sits at a floor near 20 WAPE, and no method has gone below
+it. The decision layer is not bounded in the same way: ordering at the newsvendor
+quantile rather than the mean moves lost units by $18.7\times$, an order of
+magnitude more than the entire reconstruction question. De-censoring is worth
+doing to remove bias; it is not worth funding to chase accuracy.
+\end{abstract}
+
+\section{The claim}
+
+Two literatures describe the same defect. Operations research calls it
+\emph{unconstraining} and estimates a demand distribution from censored sales
+\citep{nahmias1994,talluri2004,vulcano2012,tobin1958,kaplan1958}. Machine
+learning calls it \emph{latent demand recovery} and imputes the missing days
+\citep{du2023,wu2023,nie2024}. Both are judged by forecast error. On
+FreshRetailNet-50K \citep{wang2025} the recent reports are: bias moving from
+$-8.23\%$ to $-2.62\%$ with inverse-Mills-ratio recovery \citep{azar2026};
+$-8.1\%$ to $-1.3\%$ with an hourly censoring-aware model \citep{cadre2026}; and
+a relational model finding that recovery alone does not improve WAPE
+\citep{chen2025}.
+
+Bias moves a lot; accuracy moves a little. That pattern is not a property of the
+methods. It is a property of the information the censoring left, and this paper
+measures it.
+
+\paragraph{Claim.} The accuracy gains available from de-censoring are bounded by
+how much information the censoring left, and that bound is low. The bias is the
+part that is both large and removable; the residual error is neither.
+
+\section{How much information a censored day carries}
+
+For a day observed with stock level $c$, the observation is a mixture: values
+below $c$ are seen exactly, values at or above $c$ collapse into the event
+$D \ge c$. Under a demand family $p(\cdot;\mu)$ the Fisher information about
+$\mu$ is
+\begin{equation}
+I(c,\mu)=\sum_{y<c}p(y)\left(\frac{\partial\log p(y)}{\partial\mu}\right)^{2}
++ P(D\ge c)\left(\frac{\partial\log P(D\ge c)}{\partial\mu}\right)^{2},
+\end{equation}
+and the \emph{retention} $\rho=I(c,\mu)/I(\infty,\mu)$ is the fraction of a clean
+day's information that survives. Under negative-binomial demand, $\rho$ depends
+on the level $\mu$ and on the severity $s$ (the fraction of volume unreachable,
+which fixes $c$ through $\E[\min(D,c)]=(1-s)\mu$).
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=.95\linewidth]{r7_information.png}
+\caption{Left: information retained by a censored day, as a function of
+severity, for three demand levels. Right: effective sample size of the 1{,}500
+benchmark series; 90 censored days are worth about 68 clean ones.}
+\label{fig:info}
+\end{figure}
+
+At $s=0.32$, the benchmark's mean severity, $\rho$ is 0.58 at $\mu=1$, 0.34 at
+$\mu=5$ and 0.22 at $\mu=20$. Dispersion matters much less than the level: at
+$\mu=5$ and $s=0.32$, $\rho$ moves only from 0.374 ($k=10$) to 0.334
+($k\to\infty$), so the bound is robust to a mis-specified tail. The computation
+is exact and we validate it against Monte Carlo estimation of the score variance
+(agreement to $10^{-3}$ on five settings).
+
+\section{Accounting on the benchmark}
+
+We sample 1{,}500 of the 50{,}000 series (52.7\% stock-out days) and compute per
+series the effective sample size $n_{\text{eff}}=\sum_t \rho(s_t)$ and the
+Cram\'er--Rao floor on the relative standard error of the level,
+$1/\sqrt{n_{\text{eff}}I_1(\mu)}/\mu$.
+
+\begin{table}[t]
+\centering
+\small
+\caption{Information accounting per series (medians over 1{,}500 SKUs).}
+\label{tab:acct}
+\begin{tabular}{lr}
+\toprule
+quantity & median \\
+\midrule
+nominal days & 90 \\
+clean days & 44 \\
+\textbf{effective days} & \textbf{67.8} \\
+information destroyed & 24.7\% \\
+CR floor on level SE & 7.0\% \ (p90 8.3\%) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Censoring destroys a quarter of the level's information. The floor on a
+series-level estimate is 7\%.
+
+\section{The ceiling is visible in the numbers}
+
+Eleven methods on the same protocol span 20.3 to 35.9 WAPE and $-7.1\%$ to
+$+28.0\%$ bias. The two are not independent axes: across the eleven,
+$\mathrm{corr}(|\text{bias}|,\text{WAPE})=0.94$ ($R^2=0.89$)---almost all of the
+accuracy difference between methods \emph{is} their bias difference, at roughly
+0.44 WAPE per point of absolute bias.
+
+That is what the bound predicts. A method that removes bias entirely---the
+severity-weighted likelihood does, at $-0.3\%$---lands at 20.5 WAPE and stops
+there. A 325-second SAITS lands at 21.4 with $+2.1\%$ bias; ImputeFormer lands at
+20.4 with $+4.3\%$. The floor of the comparison is near 20.3, and the remaining
+twenty points are daily demand noise, not information about the level.
+
+The claim makes two falsifiable predictions. (i) No honest method should reach
+about 17 WAPE on this protocol: the level carries at most a couple of points, and
+it is already corrected. (ii) A method that beats the floor by a wide margin is
+more likely leaking the holdout than exploiting information that the Fisher
+bound says is not in the data.
+
+The run-to-run noise is the same size as the effect: SAITS scored 20.70, 21.46,
+21.64 and 21.70 over four seeds, so the between-method spread (1.1) is comparable
+to the within-model spread (1.0). Ranking methods on one run of this benchmark is
+not informative at the resolution the literature reports.
+
+A foundation model lands on the same floor. Zero-shot Chronos-Bolt
+\citep{ansari2024} on raw sales scores 23.4 WAPE with a $-9.8\%$ bias---worse than
+a plain gradient-boosted model, because it consumes the capped series and has no
+channel for the stock-out flag. Fed a de-censored history it scores 20.6 with
+$-4.2\%$. The model changed the level it was shown, and the level is the only
+thing that moved: 23.4 to 20.6 is the bias, not a modelling gain.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=.82\linewidth]{r1_soft_vs_hard.png}
+\caption{Bias (left) and accuracy (right) for the eleven methods. The pale bars
+are the textbook complete-censoring assumption; the dark bars are the
+severity-weighted likelihood.}
+\label{fig:bias}
+\end{figure}
+
+\section{What is not bounded}
+
+Under a 50:1 shortage-to-holding ratio, ordering at the newsvendor quantile
+$q^{*}\approx0.98$ rather than at the mean moves lost units from 6139 to 329
+($18.7\times$), while the choice of reconstruction at a fixed quantile moves them
+by 10--21\%. That the point forecast is the wrong target under asymmetric cost is
+textbook \citep{gneiting2014,petropoulos2022,talluri2004}; what the information
+bound adds is the ratio---the decision is worth an order of magnitude more than
+the estimation, and no amount of reconstruction can close that gap because the
+decision acts on a different object.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=.75\linewidth]{r4_quantile.png}
+\caption{Lost units against the ordering quantile. The curves are roughly
+parallel: the quantile sets the level, the reconstruction shifts it.}
+\label{fig:quantile}
+\end{figure}
+
+\section{Can the mask be optimised instead?}
+
+If censoring destroys information, the obvious response is to stock more and
+observe more. We test it in a Bayesian simulation: 300 SKUs, 30 weeks, NB2 demand
+with an unknown level, three policies---greedy (newsvendor quantile), dither
+(same mean inventory, $\pm40\%$ randomisation) and explore ($+1$ posterior
+sd)---against an inventory-matched greedy control.
+
+\begin{table}[h]
+\centering
+\small
+\caption{Posterior error after 30 weeks, fill rate and mean inventory.}
+\label{tab:dc}
+\begin{tabular}{lrrr}
+\toprule
+policy & posterior error & fill & mean inventory \\
+\midrule
+greedy $q=0.91$ & 21.1\% & 0.783 & 3.06 \\
+dither & 21.5\% & 0.731 & 3.00 \\
+explore & 16.3\% & 0.837 & 3.37 \\
+greedy $q=0.995$ (matched) & 17.1\% & 0.830 & 3.31 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Randomisation at fixed inventory buys nothing, and once inventory is matched,
+exploration buys 0.8 pp. At scalar uncertainty, information gathering has no
+separate value: the lever \emph{is} the inventory level. The information cannot
+be cheaply bought back, which is why the bound in \S2 is a constraint rather than
+a modelling inconvenience.
+
+\section{What this changes}
+
+\textbf{Measure aggregate bias first.} It is the whole of the WAPE difference and
+it is cheap to compute from a clean holdout week. A pipeline that reports WAPE
+but not bias reports the bounded part and omits the unbounded one.
+
+\textbf{Correct it with the cheapest correct estimator.} The severity-weighted
+likelihood needs the stock-status log and fifteen seconds of CPU; it takes a
+$-7.1\%$ bias to $-0.3\%$. Deep imputation reaches $+2.1\%$ at three orders of
+magnitude more compute, with run-to-run variance larger than the remaining gap.
+
+\textbf{Spend the next dollar on the quantile.} No information bound applies to
+the ordering rule; it is worth $18.7\times$ against $10$--$21\%$ for the entire
+reconstruction question.
+
+\textbf{Carry the 7\%.} The floor is a property of the data and is not removable,
+but it is small next to the 25\% daily variability that already drives safety
+stock. Per-SKU level uncertainty is a second-order term in inventory sizing, and
+should be acknowledged rather than modelled.
+
+\section{Limitations}
+
+\begin{enumerate}\itemsep2pt
+\item $\rho$ assumes a negative-binomial family. Dispersion barely matters, so
+the bound is robust to a mis-specified tail, but a zero-inflated process would
+change the curve.
+\item The bound is for per-SKU estimation from that SKU's own history. A pooled
+model borrows strength across series and is not bounded by it; every published
+de-censoring method reconstructs series independently, so the bound does apply to
+the paradigm compared.
+\item The bridge from the bound to the WAPE floor is empirical (corr $=0.94$ on
+eleven points), not derived.
+\item Seven holdout days, one split, 90-day window, one country and category.
+\item Lead time 3 days, cost ratio 50:1, no shelf life.
+\item The dual-control test is a simulation, not a field experiment.
+\end{enumerate}
+
+\appendix
+\section{The controlled simulator}
+\label{app:sim}
+
+Forty SKUs over 420 days are drawn from a negative-binomial level process with a
+lognormal scale, a linear trend, weekly and annual sinusoids and 2\% promotion
+spikes. Censoring is generated by a daily-review $(s,S)$ policy with a 3-day lead
+time, sized on true demand so availability is independent of any forecaster under
+test. E1 sweeps the cover; E2 resizes the policy each week from the method's own
+forecast; E3 injects a $+35\%$ level shift at day 380 and freezes the forecaster
+at day 300.
+
+\bibliographystyle{plainnat}
+\bibliography{refs}
+
+\end{document}
