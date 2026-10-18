@@ -214,6 +214,40 @@ in inventory sizing, so it should be *acknowledged* rather than *modelled*: a
 pipeline that spends its engineering budget chasing it will be chasing a
 rounding error.
 
+### 7.1 The ladder: censoring is a procurement decision
+
+The bound is a property of the data rather than of the model, which turns
+de-censoring from a modelling question into a procurement one. What you can
+recover is fixed by what you log:
+
+| rung | you log | the correction you can justify | measured bias |
+|---|---|---|---|
+| **R0** | sales | nothing: the censoring is unidentifiable | unknown |
+| **R1** | + a stock-out flag | the textbook censored likelihood | **+9.4 to +28.0%** |
+| **R2** | + stock-out hours | severity-weighted likelihood | **−0.3%** |
+| **R3** | + hourly sales | same, self-calibrated profile | −0.3% |
+
+R1→R2 is one column in the warehouse system, and it is worth 10–28 points of
+bias — more than every modelling advance reported on this benchmark combined
+(this paper's included). A practitioner who reads one line of this paper should
+read that one.
+
+### 7.2 What the audit reports
+
+The accompanying tool answers the three questions in the order they are asked:
+how censored is this table (rate, severity, effective days, the 7% floor); what
+was demand (severity-weighted reconstruction, damped for the R1 case because a
+full correction over-shoots); and how much to order (the newsvendor quantile).
+It repairs the predictable failures of real exports — GBK encodings, renamed
+columns, duplicate rows, returns arriving as negative units — and distinguishes
+a day with no sale from a day with no record, which the usual pipeline silently
+conflates by writing a zero.
+
+**Code and data.** The dataset is public (CC-BY-4.0). The audit tool, the
+estimators, the experiment scripts and every figure in this paper reproduce from
+one command on a laptop CPU — no GPU, no training, twelve tests covering both
+the estimators and the data-repair layer.
+
 ## 8. Limitations
 
 1. $\rho$ assumes a negative-binomial family. The dispersion barely matters
