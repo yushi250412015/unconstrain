@@ -1,6 +1,6 @@
 # De-censoring Has a Ceiling, and It Is Low: an information bound for censored retail demand
 
-*Draft v2 — cycle 2 of 3. Numbers reproduce from `python -m unconstrain --data real --series 1500`.*
+*Draft v4 — submission candidate, content freeze 2026-11-20. Numbers reproduce from `python -m unconstrain --data real --series 1500` (add `JOBLIB_MULTIPROCESSING=0` in a shell that forbids named pipes); twelve tests cover the estimators and the data-repair layer.*
 
 ## Abstract
 
@@ -43,6 +43,25 @@ paper makes it precise.
 **Claim.** The accuracy gains available from de-censoring are bounded by how much
 information the censoring left, and that bound is low. The bias is the part that
 is both large and removable; the residual error is neither.
+
+**What this paper is, and is not.** It is not a new reconstruction method, and it
+does not claim to beat any of the eleven it compares — on this protocol it wins
+by 0.2 points, and says so. It is an accounting paper: it computes what the
+censoring destroyed, prices the residue in the metric the field optimises, and
+shows that the differences the field reports are the part the bound leaves free.
+The method slot on this benchmark is already occupied three times over, which is
+why a fourth estimator is the wrong contribution here:
+
+| work | what it reports | what it occupies | what it leaves |
+|---|---|---|---|
+| Azar 2026 (*Inventions* 11(5):89) | inverse-Mills-ratio recovery; bias −8.23% → −2.62%; a leakage-free pipeline | a working method and an evaluation protocol | no bound on what remains |
+| Yin, Zheng & Kong 2026 (*Sustainability* 18(15):7642) | stock-out flags as lower bounds; hourly separation of censoring | censoring-aware feature engineering | no accuracy ceiling |
+| Chen & Jin 2025 (*JTIE* 4(1):325) | relational model; recovery alone does not improve WAPE | the observation this paper formalises | no quantification of why |
+
+The last row is the one to keep in view: the field has already noticed that
+recovery does not buy accuracy. What it has not done is compute how much accuracy
+was ever there to buy. That is the whole claim, and §4 states the two ways it can
+be falsified.
 
 ## 2. How much information a censored day carries
 
@@ -259,7 +278,9 @@ the estimators and the data-repair layer.
    published de-censoring method reconstructs each series independently, so the
    bound does apply to the paradigm being compared, but a pooled estimator could
    in principle sit below it.
-3. Scored on 7 clean holdout days; one split.
+3. Scored on 7 clean holdout days; one split; one benchmark, one country, one
+   season (spring 2024), so validity across stores, cities and categories is
+   untested here.
 4. Lead time 3 days, cost ratio 50:1, no shelf life.
 5. The 90-day window cannot resolve annual seasonality.
 

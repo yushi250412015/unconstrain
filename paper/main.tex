@@ -16,7 +16,9 @@
 
 \title{\bfseries De-censoring Has a Ceiling, and It Is Low:\\
 an Information Bound for Censored Retail Demand}
-\author{Draft v3}
+% Draft v4 --- submission candidate, content freeze 2026-11-20.
+% TODO before submission: author block, affiliation, corresponding author.
+\author{[First Author]\\[2pt] [Affiliation]\\[2pt] \texttt{[email]}}
 \date{}
 
 \begin{document}
@@ -64,6 +66,42 @@ measures it.
 \paragraph{Claim.} The accuracy gains available from de-censoring are bounded by
 how much information the censoring left, and that bound is low. The bias is the
 part that is both large and removable; the residual error is neither.
+
+\paragraph{What this paper is, and is not.} It is not a new reconstruction
+method, and it does not claim to beat any of the eleven it compares---on this
+protocol it wins by $0.2$ points, and says so. It is an accounting paper: it
+computes what the censoring destroyed, prices the residue in the metric the field
+optimises, and shows that the differences the field reports are the part the
+bound leaves free. The method slot on this benchmark is already occupied three
+times over, which is why a fourth estimator is the wrong contribution here
+(Table~\ref{tab:prior}).
+
+\begin{table}[t]
+\centering\small
+\caption{What occupies the method slot on FreshRetailNet-50K, and what each
+leaves open.}
+\label{tab:prior}
+\begin{tabular}{@{}p{2.6cm}p{4.3cm}p{4.1cm}p{4.1cm}@{}}
+\toprule
+work & what it reports & what it occupies & what it leaves \\
+\midrule
+Azar 2026 \citep{azar2026} & inverse-Mills ratio; bias $-8.23\%\to-2.62\%$; a
+leakage-free pipeline & a working method, an evaluation protocol & no bound on
+what remains \\
+Yin et al.\ 2026 \citep{cadre2026} & stock-out flags as lower bounds; hourly
+separation of censoring & censoring-aware feature engineering & no accuracy
+ceiling \\
+Chen \& Jin 2025 \citep{chen2025} & relational model; recovery alone does not
+improve WAPE & the observation this paper formalises & no quantification of
+why \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The last row is the one to keep in view: the field has already noticed that
+recovery does not buy accuracy. What it has not done is compute how much accuracy
+was ever there to buy. That is the whole claim, and \S4 states the two ways it
+can be falsified.
 
 \section{How much information a censored day carries}
 
@@ -324,8 +362,10 @@ change the curve.
 model borrows strength across series and is not bounded by it; every published
 de-censoring method reconstructs series independently, so the bound does apply to
 the paradigm compared.
-\item The bridge from the bound to the WAPE floor is empirical (corr $=0.94$ on
-eleven points), not derived.
+\item The bridge from the bound to the WAPE floor has an analytic form (\S4) and
+two simulations behind it; what remains borrowed rather than proved is the
+constant at the benchmark's base WAPE, and the $0.94$ correlation is confounded
+and is reported as such.
 \item Seven holdout days, one split, 90-day window, one country and category.
 \item Lead time 3 days, cost ratio 50:1, no shelf life.
 \item The dual-control test is a simulation, not a field experiment.

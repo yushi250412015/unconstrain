@@ -23,6 +23,10 @@ No GPU, no training, no config. The core is a few hundred lines of numpy/scipy.
 pip install -e .          # numpy pandas scipy scikit-learn
 ```
 
+On a shell that forbids named pipes (some sandboxes and restricted shells),
+prefix any run with `JOBLIB_MULTIPROCESSING=0`: the pipeline then fits serially,
+about twice as slow, and produces the same numbers.
+
 ## The data ladder
 
 What you can recover depends on what you log. `diagnose` names your rung:
