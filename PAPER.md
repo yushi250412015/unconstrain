@@ -14,14 +14,15 @@ standard error of any unbiased per-SKU level estimate is a median 7.0%.
 Against a daily coefficient of variation of about 25%, a 7% level uncertainty is
 a minor term — which explains a pattern the field reports without explaining:
 eleven methods, spanning linear interpolation to ImputeFormer, differ by 35
-percentage points in bias but by only 1.1 in WAPE, and |bias| alone accounts for
-89% of the between-method WAPE variance — a correlation that, on inspection, is
-not causal (§4). Once the bias is corrected the
+percentage points in bias and, with the bias removed, by only 1.1 in WAPE; |bias|
+alone accounts for 89% of the between-method WAPE variance — a correlation that,
+on inspection, is not causal (§4). Once the bias is corrected the
 error sits at a floor near 20 WAPE, and no method has gone below it. The
 decision layer is not bounded in the same way: ordering at the newsvendor
-quantile rather than the mean moves lost units by 18.7×, an order of magnitude
-more than the entire reconstruction question. De-censoring is worth doing to
-remove bias; it is not worth funding to chase accuracy.
+quantile rather than the mean moves lost units by 16.8× on its own (18.7× once
+the history is de-censored), an order of magnitude more than the entire
+reconstruction question. De-censoring is worth doing to remove bias; it is not
+worth funding to chase accuracy.
 
 ## 1. The claim
 
@@ -78,14 +79,27 @@ day's information that survives. With NB2 demand, $\rho$ depends on the level
 $\mu$ and on the severity $s$ of the loss (the fraction of volume unreachable,
 which fixes $c$ through $E[\min(D,c)]=(1-s)\mu$).
 
-![information](results/r7_information.png)
+![Figure 1. One SKU, reconstructed](results/p5_example_series.png)
 
-At $s=0.32$, the benchmark's mean severity, $\rho$ is 0.58 at $\mu=1$, 0.34 at
-$\mu=5$ and 0.22 at $\mu=20$. The dispersion matters much less than the level:
-at $\mu=5$ and $s=0.32$, $\rho$ moves only from 0.374 ($k=10$) to 0.334
-($k\to\infty$), so the bound is robust to a mis-specified tail. The computation is
-exact and we validate it against Monte Carlo estimation of the score variance
-(agreement to $10^{-3}$ on five settings).
+Figure 1 is the problem in one picture: a single SKU with 61% stock-out days and a
+mean severity of 0.35. The bars are what the warehouse recorded; the line is what
+the severity-weighted likelihood says demand was. The reconstruction adds 9.0%
+over the window, and the days it adds most are the days the bars are short — which
+is also why the correction cannot be checked against truth here: the demand it
+restores was never observed. The honest evaluation in §3 therefore scores only
+fully-stocked days.
+
+![Figure 2. Information retained by a censored day](results/p1_information_curves.png)
+
+Retention is a *step* function of severity rather than a smooth one, because
+demand is counted in whole units: every time the implied stock level crosses an
+integer the censoring event changes and $\rho$ jumps (Figure 2). At $s=0.32$, the
+benchmark's mean severity, $\rho$ is 0.58 at $\mu=1$, 0.34 at $\mu=5$ and 0.22 at
+$\mu=20$ (marked). Dispersion matters much less than the level: at $\mu=5$ and
+$s=0.32$, $\rho$ moves only from 0.374 ($k=10$) to 0.334 ($k\to\infty$), so the
+bound is robust to a mis-specified tail. The computation is exact and we validate
+it against Monte Carlo estimation of the score variance (agreement to $10^{-3}$ on
+five settings).
 
 ## 3. Accounting on the benchmark
 
@@ -105,13 +119,47 @@ on the relative standard error of the level, $1/\sqrt{n_{\text{eff}}I_1(\mu)}/\m
 Censoring destroys a quarter of the level's information. The floor on a
 series-level estimate is 7%.
 
+![Figure 3. The floor against the demand level](results/p2_bound_vs_level.png)
+
+The floor is not one number across the panel (Figure 3): it falls from about 8.0%
+for the slowest quartile of series to 5.5% for the fastest, because a low-volume
+SKU carries less information per day to begin with. Within this panel only 0.2% of
+series exceed a 10% floor — a fact worth stating plainly, because the panel is
+drawn from the heavy end of the catalogue (the 4,000 best-selling series). The
+long tail, where a series sells a few units a week, is absent here and would sit
+strictly above these curves; the 7% floor is therefore a lower bound for a real
+catalogue. That is the conservative direction for a ceiling claim, and the
+opposite direction for a practitioner carrying many slow movers.
+
 ## 4. The ceiling is visible in the numbers
 
-Eleven reconstruction methods on the same protocol span 20.3 to 35.9 WAPE and
-−7.1% to +28.0% bias. The two are not independent axes: across the eleven,
-corr(|bias|, WAPE) = 0.94 (R² = 0.89), i.e. almost all of the accuracy
-difference between methods *is* their bias difference, at roughly 0.44 WAPE per
-point of absolute bias.
+Table 1 puts all eleven methods in one place, on the official holdout. They span
+20.3 to 35.9 WAPE and −7.1% to +28.0% bias, and the two axes are not independent:
+across the eleven, corr(|bias|, WAPE) = 0.94 (R² = 0.89) and the fitted slope is
+0.56 WAPE per point of absolute bias (Figure 4), i.e. almost all of the accuracy
+difference between methods *is* their bias difference.
+
+| method | WAPE | bias | fill | lost |
+|---|---|---|---|---|
+| sales as demand | 23.4 | −7.1% | 0.865 | 6154 |
+| linear interpolation | 21.1 | +1.3% | 0.898 | 4643 |
+| gradient-boosted imputation | 21.3 | +1.6% | 0.901 | 4496 |
+| Kaplan–Meier (hard) | 28.8 | +9.4% | 0.899 | 4602 |
+| Tobit (hard) | 23.3 | +10.6% | 0.934 | 3023 |
+| negative binomial (hard) | 35.9 | +28.0% | 0.960 | 1815 |
+| Kaplan–Meier (severity) | 22.1 | +3.2% | 0.899 | 4604 |
+| **Tobit (severity)** | **20.5** | **−0.3%** | 0.896 | 4723 |
+| **negative binomial (severity)** | **20.3** | +1.5% | 0.906 | 4271 |
+| SAITS (4 runs) | 21.4 | +2.1% | — | — |
+| ImputeFormer | 20.4 | +4.3% | — | — |
+
+*Notes.* All eleven are scored on the same official 7-day holdout, on days with no
+stock-out hour; *fill* and *lost* are the inventory simulation of §5 (50:1 cost
+ratio, 3-day lead time). The two deep models are reported on accuracy only. A
+TimesNet baseline collapsed to 28.0 WAPE (−13.6% bias) after normalisation and is
+quoted here rather than in the table. The full run takes 300 s on a laptop CPU.
+
+![Figure 4. Bias against accuracy, all eleven methods](results/p4_bias_accuracy.png)
 
 That is what the bound predicts. A method that removes bias entirely — the
 severity-weighted likelihood does, at −0.3% — lands at 20.5 WAPE and stops
@@ -158,6 +206,17 @@ level information, so it is reconstruction artifact.** And the bound is
 falsifiable in the useful direction: a method that beats the floor by more than
 0.5 points has either found information the censoring destroyed or is leaking.
 
+![Figure 5. What a level error costs in WAPE](results/p3_wape_budget.png)
+
+Figure 5 reads the two numbers against each other. The bound is a curve; the three
+quantities the paper cares about are points on it. At the Cramér–Rao floor the
+permitted inflation is 2.3%; the matched simulation measures 1.0%; and the
+*observed* spread between the honest methods is 5.4%, which the curve says would
+require a level error of about 10.6% — one and a half times the floor. Level
+uncertainty could explain the whole spread only if the effective level error were
+1.5× the largest any unbiased estimator can be forced into; at the floor it
+explains under half of the spread, and the simulation says a fifth.
+
 **The asymmetry is the part that should worry an operator.** A −7% level error
 costs *nothing* in L1 — it moves predictions toward the median, which is where
 an L1 loss is minimised — while a +10% error costs 1.6 points. Bias low is free
@@ -182,10 +241,32 @@ benchmark is not informative at the resolution the literature reports.
 ## 5. What moves cost
 
 Under a 50:1 shortage-to-holding ratio, ordering at the newsvendor quantile
-$q^{*}\approx0.98$ rather than at the mean moves lost units from 6139 to 329
-(18.7×), while the choice of reconstruction at a fixed quantile moves them by
-10–21%. Since the quantile acts on the level — exactly the quantity that
-censoring corrupts — this is the same bias mechanism, priced.
+$q^{*}\approx0.98$ instead of at the mean moves lost units from 6139 to 365
+(16.8×) for the naive pipeline, and from 5507 to 329 (16.7×) once the history is
+de-censored; at a *fixed* quantile the choice of reconstruction moves them by
+10–21%. The corner-to-corner number, 18.7×, combines the two moves, and the
+decomposition is worth keeping straight: the decision is worth an order of
+magnitude, the estimation inside it worth a tenth of that.
+
+| ordering quantile | sales as demand | Tobit (severity) | NB (severity) |
+|---|---|---|---|
+| 0.50 (the mean) | 6139 | 5507 | 4864 |
+| 0.90 | 1186 | 1025 | 848 |
+| 0.95 | 669 | 608 | 533 |
+| 0.98 (newsvendor) | 365 | **329** | 342 |
+
+*Notes.* Lost units over the whole holdout; the policy and the 50:1 cost ratio are
+identical in every cell. Reading down a column is the decision, reading across a
+row is the reconstruction.
+
+![Figure 6. Lost units against the ordering quantile](results/r4_quantile.png)
+
+Two readings of the grid matter. **Down a column**, the quantile is worth 14.2× to
+16.8× in lost units (mean → 0.98 for the same estimator). **Across a row**, at a
+fixed quantile, the entire reconstruction question is worth 10–21%, and at the
+newsvendor quantile only 10%. The decision dominates the estimation by an order of
+magnitude and — unlike the estimation — is not bounded by the information the
+censoring destroyed.
 
 ## 6. Can the mask be optimised instead?
 
@@ -221,9 +302,20 @@ likelihood needs the stock-status log and fifteen seconds of CPU; it takes a
 −7.1% bias to −0.3%. Deep imputation reaches +2.1% at three orders of magnitude
 more compute, with run-to-run variance larger than the remaining gap.
 
+![Figure 7. Deep imputers against a fifteen-second likelihood](results/r6_deep_imputer.png)
+
+Figure 7 is that sentence as a picture: the deep imputers cost 325–900 s of CPU
+and land within 1.1 WAPE of a likelihood that costs 15 s, with a *larger* bias in
+every case (SAITS +2.1%, ImputeFormer +4.3%, a normalised TimesNet −13.6%),
+against −0.3% for the severity-weighted Tobit. The vertical distance to the floor
+is noise; the horizontal distance is three orders of magnitude. Paying it is a
+decision a team is entitled to make, but it should be made knowing that the
+reconstruction was never the expensive part of the problem.
+
 **Spend the next dollar on the quantile, not the reconstruction.** No
 information bound applies to the ordering rule. Moving from the mean to the
-newsvendor fractile is worth 18.7× in lost units; the entire reconstruction
+newsvendor fractile is worth 14.2–16.8× in lost units for a fixed estimator
+(16.8–18.7× if the history is de-censored too); the entire reconstruction
 question is worth 10–21%.
 
 **Carry the 7%.** The floor is a property of the data and is not removable, but
@@ -283,6 +375,28 @@ the estimators and the data-repair layer.
    untested here.
 4. Lead time 3 days, cost ratio 50:1, no shelf life.
 5. The 90-day window cannot resolve annual seasonality.
+
+## Appendix A. Run-to-run variance of the deep imputer
+
+The four SAITS runs quoted in Table 1 use one configuration and four seeds:
+
+| run | WAPE | bias |
+|---|---|---|
+| seed 0 | 20.70 | +0.0% |
+| seed 1 | 21.46 | +1.7% |
+| seed 2 | 21.64 | +2.7% |
+| seed 3 | 21.70 | +4.1% |
+
+The within-model range (1.0 WAPE) is the same size as the between-method spread of
+the honest methods (1.1). This is why Table 1 carries the inventory columns and
+bias instead of a leaderboard rank: at one run, at this resolution, the ranking is
+not stable, and a paper that reports only the rank is reporting noise.
+
+A second reproducibility note: the full pipeline (Table 1, the quantile grid of
+§5 and every figure) runs in 300 s on a laptop CPU with no GPU and no training,
+and twelve tests cover the estimators and the data-repair layer. In a shell that
+forbids named pipes — some sandboxes do — the run needs
+`JOBLIB_MULTIPROCESSING=0` and fits serially at about twice the wall-clock time.
 
 ## References
 
