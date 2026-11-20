@@ -1,0 +1,56 @@
+[
+ {
+  "method": "km_s",
+  "severity": "hours",
+  "wape": 22.681196746562847,
+  "bias": 4.081366824882922
+ },
+ {
+  "method": "km_s",
+  "severity": "volume-global",
+  "wape": 22.236361157404712,
+  "bias": 3.7229014699772947
+ },
+ {
+  "method": "km_s",
+  "severity": "volume-own",
+  "wape": 22.127683975617146,
+  "bias": 3.189660828561989
+ },
+ {
+  "method": "tobit_s",
+  "severity": "hours",
+  "wape": 20.40848323403705,
+  "bias": 0.9243346340854671
+ },
+ {
+  "method": "tobit_s",
+  "severity": "volume-global",
+  "wape": 20.50541029601769,
+  "bias": 0.04792111093637591
+ },
+ {
+  "method": "tobit_s",
+  "severity": "volume-own",
+  "wape": 20.460097475447952,
+  "bias": -0.3341722941838399
+ },
+ {
+  "method": "nb_s",
+  "severity": "hours",
+  "wape": 20.621695897773947,
+  "bias": 4.303716902066227
+ },
+ {
+  "method": "nb_s",
+  "severity": "volume-global",
+  "wape": 20.647336867800007,
+  "bias": 2.2403090677707893
+ },
+ {
+  "method": "nb_s",
+  "severity": "volume-own",
+  "wape": 20.343279456314086,
+  "bias": 1.5456765621001471
+ }
+]

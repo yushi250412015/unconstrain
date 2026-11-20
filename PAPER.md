@@ -1,4 +1,4 @@
-﻿# De-censoring Has a Ceiling, and It Is Low: an information bound for censored retail demand
+# De-censoring Has a Ceiling, and It Is Low: an information bound for censored retail demand
 
 *Draft v4 — submission candidate, content freeze 2026-11-20. Numbers reproduce from `python -m unconstrain --data real --series 1500` (add `JOBLIB_MULTIPROCESSING=0` in a shell that forbids named pipes); twelve tests cover the estimators and the data-repair layer.*
 
@@ -6,26 +6,20 @@
 
 Retail demand is censored by inventory, and a 2025–2026 literature on the
 FreshRetailNet-50K benchmark competes on forecast accuracy. We ask how much
-accuracy is available. A censored day does not carry a clean day's information,
-and we compute the shortfall exactly: at the benchmark's mean severity of 0.32,
-a censored day retains 22–58% of a clean day's Fisher information, 90 days of
-data are worth about 68 (25% destroyed), and the Cramér–Rao floor on the
-standard error of any unbiased per-SKU level estimate is a median 7.0%.
-Against a daily coefficient of variation of about 25%, a 7% level uncertainty is
-a minor term — which explains a pattern the field reports without explaining:
-eleven methods, spanning linear interpolation to ImputeFormer, differ by 35
-percentage points in bias and, with the bias removed, by only 1.1 in WAPE; |bias|
-alone accounts for 89% of the between-method WAPE variance — a correlation that,
-on inspection, is not causal (§4). Three propositions carry the accounting —
-identification of the implied cap by severity, additivity of Fisher information,
-and the second-order cost of a level error at the decision layer — so the ceiling
-is derived rather than fitted. Once the bias is corrected the
-error sits at a floor near 20 WAPE, and no method has gone below it. The
-decision layer is not bounded in the same way: ordering at the newsvendor
-quantile rather than the mean moves lost units by 16.8× on its own (18.7× once
-the history is de-censored), an order of magnitude more than the entire
-reconstruction question. De-censoring is worth doing to remove bias; it is not
-worth funding to chase accuracy.
+accuracy is available. At the benchmark's mean severity, a censored day retains
+22–58% of a clean day's Fisher information: 90 days are worth 68, a quarter of the
+level's information is destroyed, and the Cramér–Rao floor on any unbiased per-SKU
+level estimate is 7.0%. Eleven methods, from linear interpolation to a deep
+imputer, span 35 percentage points of bias but, with the bias removed, only 1.1 of
+WAPE; the correlation of |bias| with WAPE (0.94) is real and not causal. Once bias
+is corrected, error sits at a floor near 20 WAPE and no method has gone below it.
+The decision layer is not bounded this way: ordering at the newsvendor quantile
+instead of the mean moves lost units by 16.8× (18.7× with a de-censored history),
+an order of magnitude more than the entire reconstruction question, while the
+floor's own level error is a second-order cost at the order point. De-censoring is
+worth doing to remove bias; it is not worth funding to chase accuracy.
+
+**Keywords:** censored demand; unconstraining; Fisher information; Cramér–Rao bound; relative efficiency; newsvendor quantile; pinball loss.
 
 ## 1. The claim
 
@@ -209,6 +203,38 @@ long tail, where a series sells a few units a week, is absent here and would sit
 strictly above these curves; the 7% floor is therefore a lower bound for a real
 catalogue. That is the conservative direction for a ceiling claim, and the
 opposite direction for a practitioner carrying many slow movers.
+
+### 3.1 The severity definition is a choice, and it moves bias
+
+The accounting needs a number for the severity of a censored day, and the data
+offer two: the *share of business hours* without stock, or the *share of the day's
+volume* that was unreachable. The second requires the SKU's hourly sales profile;
+the first requires nothing. The panel supports both, so the choice can be priced.
+Three definitions are compared: hours out of 16; volume weighted with the global
+hourly profile; volume weighted with the SKU's own profile (the one used throughout
+this paper).
+
+| severity definition | mean on censored days | KM (sev) bias | Tobit (sev) bias | NB (sev) bias | mean WAPE |
+|---|---|---|---|---|---|
+| hours / 16 | 0.388 | +4.08% | +0.92% | +4.30% | 21.24 |
+| volume, global profile | 0.325 | +3.72% | +0.05% | +2.24% | 21.13 |
+| **volume, own profile** | **0.318** | **+3.19%** | **−0.33%** | **+1.55%** | **20.98** |
+
+*Same holdout, grader and forecaster in every row; only the severity column changes.
+Mean WAPE is over the three severity-weighted estimators.*
+
+Counting hours overstates severity by 22% (0.388 against 0.318), because sales
+concentrate in the middle of the day: one missing hour at 9 a.m. destroys far more
+demand than one at 8 p.m. The consequence is what the model predicts. Severity
+enters through the cap (Proposition 1), so a mis-stated severity shows up as *bias*
+first — the hour-count version carries +0.9 to +4.3 points of bias where the volume
+version carries −0.3 to +3.2 — while accuracy moves by at most 0.5 WAPE, at the
+resolution of the design (§8). Two conclusions follow. First, the severity
+definition belongs in the bias column, not the accuracy column, exactly like the
+reconstruction question it feeds. Second, the self-calibrated profile (own against
+global) is worth 0.1–0.3 WAPE and up to 0.7 bias points: real, reproducible, and
+small — which is the honest size of the "hourly sales" rung in the logging ladder
+of §7.1.
 
 ## 4. The ceiling is visible in the numbers
 
@@ -656,6 +682,35 @@ $q^{*}$, with $q=q^{*}(1+\varepsilon)$, gives
 $C(q)-C(q^{*})=\tfrac12C''(q^{*})(q^{*}\varepsilon)^2+o(\varepsilon^2)$. For integer
 demand $C$ is piecewise linear and the expansion is an order statement only;
 §5 reports the exact penalties. ∎
+
+## Data, code and declarations
+
+**Data availability.** FreshRetailNet-50K (Wang et al., 2025) is public under
+CC-BY-4.0 and distributed on Hugging Face as `train.parquet` and `eval.parquet`;
+no new data were generated. The official evaluation split (2024-06-26 to
+2024-07-02) is used as the holdout and is never touched by model selection,
+threshold choice or figure revision.
+
+**Code availability.** The audit tool, estimators, experiment scripts and every
+figure are in `github.com/yushi250412015/unconstrain` under the MIT licence.
+`python -m unconstrain --data real --series 1500` reproduces Tables 1–2 and
+Figures 1–7 in 300 s on a laptop CPU, and twelve tests cover the estimators and the
+data-repair layer. In a shell that forbids named pipes, prefix the run with
+`JOBLIB_MULTIPROCESSING=0`.
+
+**Reproducibility.** Every empirical number is written by the pipeline to a JSON
+file in `results/` (`theory.json`, `panel_theory.json`, `severity_ablation.json`);
+the tables and the text quote only those files, and no number is typed by hand.
+
+**Author contributions (CRediT).** [First Author]: conceptualization, methodology,
+software, formal analysis, investigation, writing — original draft. [Co-author]:
+[roles to be completed].
+
+**Competing interests.** The author(s) declare no competing interests.
+
+**Funding.** This research received no specific grant from any funding agency.
+
+**Acknowledgements.** [To be completed: advisor, department and reviewers.]
 
 ## References
 
