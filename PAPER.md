@@ -16,7 +16,10 @@ a minor term — which explains a pattern the field reports without explaining:
 eleven methods, spanning linear interpolation to ImputeFormer, differ by 35
 percentage points in bias and, with the bias removed, by only 1.1 in WAPE; |bias|
 alone accounts for 89% of the between-method WAPE variance — a correlation that,
-on inspection, is not causal (§4). Once the bias is corrected the
+on inspection, is not causal (§4). Three propositions carry the accounting —
+identification of the implied cap by severity, additivity of Fisher information,
+and the second-order cost of a level error at the decision layer — so the ceiling
+is derived rather than fitted. Once the bias is corrected the
 error sits at a floor near 20 WAPE, and no method has gone below it. The
 decision layer is not bounded in the same way: ordering at the newsvendor
 quantile rather than the mean moves lost units by 16.8× on its own (18.7× once
@@ -66,18 +69,76 @@ be falsified.
 
 ## 2. How much information a censored day carries
 
+**Model.** A SKU's demand on day $t$ is $D_t\sim\mathrm{NB2}(\mu,k)$, with mean
+$\mu$ and dispersion $k$ (variance $\mu+\mu^2/k$); days are conditionally
+independent given $\mu$. The warehouse stocks $C_t$ units before demand is
+realised and records $Y_t=\min(D_t,C_t)$, together with the stock status that fixes
+$C_t$. The object of interest is the *level* $\mu$; the estimator's job is to
+report it, not to reconstruct the individual unobserved days.
+
+We work under five assumptions, stated because each one is a scope restriction
+that a reader is entitled to check:
+
+- **(A1) Family.** $D_t\mid\mu$ is negative binomial with known dispersion
+  $k$; $\mu\in(0,\infty)$; days independent given $\mu$.
+- **(A2) Observation.** $Y_t=\min(D_t,C_t)$ with $C_t\perp D_t$ — the stock level
+  is set by a policy, not by the demand it faces, so censoring is not
+  informative about $\mu$ beyond the recorded severity.
+- **(A3) Severity.** The data record
+  $s_t=1-\mathbb{E}[\min(D_t,C_t)]/\mu\in[0,1]$, the share of the day's expected
+  volume that was unreachable; $s_t=0$ on a fully-stocked day.
+- **(A4) Level.** $\mu$ is constant over the accounting window; the estimand is
+  the window-average level.
+- **(A5) Regularity.** $p(\cdot;\mu)$ is differentiable in $\mu$ and dominated,
+  so Fisher information and the Cramér–Rao bound apply.
+
+*Scope remark.* (A1)–(A5) make the bound below a statement about **per-SKU
+estimation from that SKU's own history**. A pooled estimator borrows strength
+across series and is not covered; this is a restriction of the claim, not a
+caveat to be argued away.
+
 For a day observed with stock level $c$, the observation is a mixture: values
 below $c$ are seen exactly, values at or above $c$ collapse into the event
-$D \ge c$. Under a demand family $p(\cdot;\mu)$ the Fisher information about
+$D \ge c$. Under (A1) the Fisher information about
 $\mu$ is
 
 $$I(c,\mu)=\sum_{y<c}p(y)\left(\frac{\partial\log p(y)}{\partial\mu}\right)^2
 + P(D\ge c)\left(\frac{\partial\log P(D\ge c)}{\partial\mu}\right)^2,$$
 
 and the **retention** $\rho=I(c,\mu)/I(\infty,\mu)$ is the fraction of a clean
-day's information that survives. With NB2 demand, $\rho$ depends on the level
-$\mu$ and on the severity $s$ of the loss (the fraction of volume unreachable,
-which fixes $c$ through $E[\min(D,c)]=(1-s)\mu$).
+day's information that survives — in the classical language, the *relative
+efficiency* of a censored observation against a complete one. With NB2 demand,
+$\rho$ depends on the level $\mu$ and on the severity $s$ of the loss (the
+fraction of volume unreachable, which fixes $c$ through
+$E[\min(D,c)]=(1-s)\mu$).
+
+**Proposition 1 (the cap is identified by severity).** Under (A1)–(A3), the map
+$c\mapsto\mathbb{E}[\min(D,c)]$ is continuous and non-decreasing, with limit $\mu$
+as $c\to\infty$; it is strictly increasing wherever $P(D\ge c)>0$. Hence for every
+$s\in(0,1)$ there is a unique implicit cap $c(s)$ with
+$\mathbb{E}[\min(D,c(s))]=(1-s)\mu$. *Proof:* appendix B.
+
+**Proposition 2 (information is additive, so effective days are not a
+heuristic).** Under (A1), (A2), (A5) the sample's Fisher information about $\mu$ is
+$I_n(\mu)=I_1(\mu)\sum_t\rho(s_t)$, where $I_1$ is a clean day's information.
+Writing $n_{\text{eff}}=\sum_t\rho(s_t)$, the sample is *exactly* informationally
+equivalent to $n_{\text{eff}}$ clean days — the "effective days" of §3 are a
+quantity, not an analogy. *Proof:* additivity of Fisher information for
+independent observations, with Proposition 1 fixing each day's cap.
+
+**Corollary (the floor).** Under (A1)–(A5), any unbiased estimator of $\mu$
+satisfies $\mathrm{Var}(\hat\mu)\ge 1/(I_1(\mu)n_{\text{eff}})$, hence a relative
+standard error of at least $1/(\mu\sqrt{I_1(\mu)n_{\text{eff}}})$. At the
+benchmark medians ($n_{\text{eff}}=67.8$) this is 7.0%.
+
+**Proposition 3 (retention falls monotonically with severity).** Under (A1)–(A2),
+$\rho(s)$ is non-increasing in $s$, and strictly decreasing whenever
+$P(D\ge c(s))>0$. *Proof sketch:* increasing severity replaces an exact
+observation by a coarser one (either "below the cap" or "above it"), a garbling of
+the original data; a garbling cannot increase Fisher information
+(data-processing for experiments), so $\rho$ cannot rise. The dependence on
+$\mu$ carries no such monotonicity: it is non-monotone in the sparse regime, and
+we report it as computed (§3) rather than as proved.
 
 ![Figure 1. One SKU, reconstructed](results/p5_example_series.png)
 
@@ -187,19 +248,24 @@ multiplier, and why this paper's tool spends its effort on the history.
 WAPE is realistic), a *random* 7% level error — the size of the Cramér–Rao floor
 — raises WAPE by 1.0% of its own value: **0.2 points at the benchmark's 20.5**.
 
-There is also a bound that does not depend on the simulation. Write c for the
-conditional coefficient of variation of daily demand (measured on this panel:
-median **0.32**) and δ for the relative standard error of the level. The variance
-of a forecast error decomposes exactly as
+There is also a bound that does not depend on the simulation.
 
-    Var(D) = E[Var(D | μ)] + Var(m(μ)) = (c·m)² + (δ·m)²,
+**Proposition 4 (what a level error can cost, in WAPE).** Assume (i) the level
+estimate carries relative error $\delta$, so that
+$\mathrm{Var}(D)=\mathbb{E}[\mathrm{Var}(D\mid\mu)]+\mathrm{Var}(m(\mu))=(cm)^2+(\delta m)^2$
+with $c$ the conditional coefficient of variation of daily demand (measured on
+this panel: median **0.32**), and (ii) the demand family is location–scale, so its
+mean absolute deviation is proportional to its standard deviation. Then the
+relative inflation of the mean absolute error is
+$\mathrm{MAD}(\delta)/\mathrm{MAD}(0)=\sqrt{1+(\delta/c)^2}$ exactly, and
+$\mathrm{WAPE}$, being its sample analogue, inherits it up to normalisation.
+*Why this is stated as a proposition about the MAD and not about WAPE:* WAPE
+divides by realised sales rather than by expected volume, so it is not exactly a
+location–scale functional; the ratio of realised to expected volume is 1.00 at the
+median of this panel, which is why we report the MAD bound and use its sample
+analogue.
 
-and for a location–scale family the mean absolute deviation is proportional to
-the standard deviation, so the ratio of WAPEs is bounded by the ratio of spreads:
-
-    WAPE(δ) / WAPE(0) − 1  ≤  sqrt(1 + (δ/c)²) − 1.
-
-At the floor (δ = 0.07, c = 0.32) this is **+2.3%, or 0.5 points at 20.5**. The
+At the floor ($\delta = 0.07$, $c = 0.32$) this is **+2.3%, or 0.5 points at 20.5**. The
 simulation says 0.2; the bound says 0.5; the spread between the best and worst
 honest method is 1.1. **Either number leaves most of the spread unexplained by
 level information, so it is reconstruction artifact.** And the bound is
@@ -267,6 +333,36 @@ fixed quantile, the entire reconstruction question is worth 10–21%, and at the
 newsvendor quantile only 10%. The decision dominates the estimation by an order of
 magnitude and — unlike the estimation — is not bounded by the information the
 censoring destroyed.
+
+**Proposition 5 (the decision layer is first order in the quantile, the estimation
+layer is second order in the level error).** Let
+$C(q)=c_h\mathbb{E}[(q-D)^+]+c_s\mathbb{E}[(D-q)^+]$ be the per-period newsvendor
+cost and $q^{*}=F^{-1}\!\left(c_s/(c_s+c_h)\right)$ its minimiser. For continuous
+$F$, $C'(q)=(c_h+c_s)F(q)-c_s$ and $C''(q)=(c_h+c_s)f(q)$; hence $C'(q^{*})=0$ and
+a level error of relative size $\varepsilon$ costs
+
+$$C\big(q^{*}(1+\varepsilon)\big)-C(q^{*})
+=\tfrac12(c_h+c_s)\,f(q^{*})\,(q^{*}\varepsilon)^2+o(\varepsilon^2),$$
+
+while moving the order point from the mean $\mu$ to $q^{*}$ changes the cost at
+first order. The estimation layer is *second order in the level error*; the
+decision layer is *first order in the quantile gap*. That is the analytic content
+of the ratio measured above.
+
+**A worked evaluation at the median SKU** ($\mu=3.22$, $k=60$, $c_s/c_h=50$, so
+$q^{*}=8$): $C(\mu)=37.4$ and $C(q^{*})=5.3$, a decision gain of **32.0**. A 7%
+level error — the floor — costs **0.35**, so the decision is worth **92×** the
+price of the floor's level error. The quadratic scaling is confirmed numerically:
+the penalty at $\varepsilon=$ 3.5%, 7%, 14%, 28% is 0.17, 0.35, 0.73, 1.72, i.e.
+it quadruples when the error doubles. The local Taylor constant is 3.4× smaller
+than the exact penalty, because demand is integer and $C$ is piecewise linear with
+kinks at every unit; the *scaling* survives and the constant does not, so we report
+the exact figures and use the expansion only for the order statement.
+
+The two numbers count different things and must not be added: the simulation's
+18.7× is a lost-units ratio under a multi-period $(s,S)$ policy, while the 92× is a
+cost ratio in a single-period newsvendor at the median SKU. What they share is the
+ordering of the two layers — and that ordering is a theorem, not a coincidence.
 
 ## 6. Can the mask be optimised instead?
 
@@ -359,22 +455,92 @@ estimators, the experiment scripts and every figure in this paper reproduce from
 one command on a laptop CPU — no GPU, no training, twelve tests covering both
 the estimators and the data-repair layer.
 
-## 8. Limitations
+## 8. Statistical protocol
 
-1. $\rho$ assumes a negative-binomial family. The dispersion barely matters
-   (0.374 at $k=10$ versus 0.334 in the Poisson limit), so the bound is robust
-   to a mis-specified tail; the real assumption is the family itself, and a
-   zero-inflated demand process would change the curve.
-2. The bound is for per-SKU estimation from that SKU's own history. A pooled
-   model borrows strength across series and is not bounded by it. Every
-   published de-censoring method reconstructs each series independently, so the
-   bound does apply to the paradigm being compared, but a pooled estimator could
-   in principle sit below it.
-3. Scored on 7 clean holdout days; one split; one benchmark, one country, one
-   season (spring 2024), so validity across stores, cities and categories is
-   untested here.
-4. Lead time 3 days, cost ratio 50:1, no shelf life.
-5. The 90-day window cannot resolve annual seasonality.
+Four decisions were fixed before the numbers were read; they are what the
+intervals below mean.
+
+1. **Resampling unit.** The cluster bootstrap resamples *series*, not days: days
+   inside a SKU share a level and are strongly dependent, so resampling days would
+   understate every interval. 2,000 resamples, percentile intervals.
+2. **Paired comparisons.** Methods are compared on per-series absolute-error sums,
+   paired across the same series; a paired bootstrap on the difference is more
+   powerful than comparing two overlapping marginal intervals. Two of the 1,500
+   series have no fully-stocked holdout day and are excluded from the intervals,
+   which moves point estimates by at most 0.12 WAPE.
+3. **A pre-specified family, Holm-corrected.** Five comparisons were named before
+   the intervals were computed. All five survive Holm correction at p ≤ 0.005. The
+   two severity-weighted likelihoods are 0.12 WAPE apart with overlapping
+   intervals, so we do not rank them.
+4. **Descriptive statistics stay descriptive.** The correlation of 0.94 is computed
+   across eleven method-level points, not across the 10,500 holdout observations.
+   It is not a test, and §4 gives it no causal reading.
+
+| method | WAPE | 95% CI | bias | 95% CI |
+|---|---|---|---|---|
+| sales as demand | 23.3 | 22.2 – 24.6 | −7.2 | −8.4 – −6.0 |
+| linear interpolation | 21.1 | 20.0 – 22.2 | +1.2 | +0.1 – +2.4 |
+| Kaplan–Meier (hard) | 28.6 | 26.8 – 30.7 | +9.2 | +7.3 – +11.4 |
+| Tobit (hard) | 23.2 | 21.8 – 24.5 | +10.5 | +9.0 – +11.9 |
+| negative binomial (hard) | 35.8 | 32.9 – 39.3 | +27.9 | +24.7 – +31.7 |
+| Kaplan–Meier (severity) | 22.0 | 20.9 – 23.4 | +3.1 | +1.8 – +4.4 |
+| **Tobit (severity)** | 20.4 | 19.3 – 21.5 | **−0.4** | −1.4 – +0.6 |
+| negative binomial (severity) | 20.3 | 19.3 – 21.3 | +1.5 | +0.4 – +2.6 |
+
+*Cluster-bootstrap intervals over 1,498 series. The point estimates differ from
+Table 1 by at most 0.12 WAPE because two series have no fully-stocked holdout day.*
+
+| comparison | ΔWAPE | 95% CI | Holm p |
+|---|---|---|---|
+| KM severity − KM hard | −6.59 | −7.62 – −5.71 | 0.0025 |
+| Tobit severity − sales as demand | −2.95 | −3.38 – −2.55 | 0.0020 |
+| Tobit severity − Tobit hard | −2.78 | −3.36 – −2.24 | 0.0015 |
+| NB severity − interpolation | −0.81 | −1.23 – −0.40 | 0.0020 |
+| Tobit severity − interpolation | −0.69 | −1.12 – −0.26 | 0.0040 |
+
+*Paired cluster bootstrap over the same series; a negative ΔWAPE means the first
+method is more accurate. Holm correction is over the pre-specified family of five.*
+
+The smallest difference this design resolves at 95% confidence is about **0.4
+WAPE**. Differences below that — including the 0.2-point gap between our estimator
+and the strongest imputer — should be read as ties, not as a ranking.
+
+## 9. Threats to validity
+
+**Construct.** WAPE is not the decision cost. The paper keeps the two layers apart
+and derives the mapping between them (Proposition 5) instead of letting one stand
+for the other.
+
+**Internal.** One split, seven holdout days, and no pre-registration beyond the
+four protocol decisions in §8. The pipeline is deterministic given the seed and the
+table reproduces exactly, but a different split would move the point estimates;
+the intervals in §8 are the honest statement of that uncertainty.
+
+**External.** One benchmark, one country, one season (spring 2024), and a panel
+drawn from the heavy end of the catalogue. The long tail is absent, so the 7% floor
+is a lower bound for a real catalogue rather than a typical value, and the
+level-dependence in §3 must not be extrapolated to SKUs that sell a few units a
+week.
+
+**Statistical.** Eleven methods are compared on 1,498 clusters with effects of the
+same order as the noise: the between-method spread among the honest methods is 1.1
+WAPE, the within-model spread across four SAITS seeds is 1.0 (Appendix A). The
+Fisher calculation assumes the NB2 family; the dispersion sensitivity (0.374 at
+$k=10$ versus 0.334 as $k\to\infty$) says the bound is robust to that choice, but a
+zero-inflated demand process would shift the curve and is not tested here.
+
+**Model.** (A2) assumes the stock level is set by a policy rather than by the
+demand it faces. In this dataset availability is independent of any forecaster
+under test, but a real deployment that sizes inventory from its own forecast breaks
+(A2), and the bound would then need the joint model of demand and policy. Lead
+time 3 days, cost ratio 50:1, no shelf life; the 90-day window cannot resolve
+annual seasonality.
+
+**Scope of the bound.** Per-SKU, not pooled (the remark under A1–A5). Every
+published de-censoring method reconstructs each series independently, so the bound
+applies to the paradigm being compared; a pooled estimator could in principle sit
+below it, and that is the one direction in which the ceiling claim could be
+overturned by a method rather than by a leak.
 
 ## Appendix A. Run-to-run variance of the deep imputer
 
@@ -397,6 +563,45 @@ A second reproducibility note: the full pipeline (Table 1, the quantile grid of
 and twelve tests cover the estimators and the data-repair layer. In a shell that
 forbids named pipes — some sandboxes do — the run needs
 `JOBLIB_MULTIPROCESSING=0` and fits serially at about twice the wall-clock time.
+
+## Appendix B. Proofs
+
+**Proposition 1.** Write $\mathbb{E}[\min(D,c)] = c-\mathbb{E}[(c-D)^+]$. Both
+terms are continuous in $c$ and the second is non-increasing, so the difference is
+continuous and non-decreasing; it tends to $\mathbb{E}[D]=\mu$ as $c\to\infty$, and
+its right derivative is $P(D\ge c)$, positive wherever the support carries mass
+above $c$. A continuous non-decreasing function from $[0,\infty)$ onto $[0,\mu)$
+therefore attains every value $(1-s)\mu$ with $s\in(0,1)$, uniquely except on flat
+segments, where the value is attained at the left endpoint. ∎
+
+**Proposition 2.** For independent observations with densities differentiable in
+$\mu$, the joint score is the sum of the individual scores and the cross terms in
+its variance vanish under independence (A1), so
+$I_n(\mu)=\sum_t I(c_t,\mu)$. Each day contributes $I(c_t,\mu)=\rho(s_t)I_1(\mu)$ by
+the definition of $\rho$, with $c_t$ recovered from the recorded severity by
+Proposition 1. Summing gives $I_n=I_1(\mu)\sum_t\rho(s_t)$. ∎
+
+**Proposition 3.** Lowering the cap from $c$ to $c'<c$ maps
+$Y_c=\min(D,c)$ deterministically to $Y_{c'}=\min(Y_c,c')$: a garbling of the
+observation, many-to-one wherever $P(D\ge c)>0$. By the data-processing inequality
+for statistical experiments a garbling cannot raise Fisher information, so
+$I(c',\mu)\le I(c,\mu)$ and $\rho$ is non-increasing in severity, strictly so
+where the garbling is non-invertible on a set of positive probability. ∎
+
+**Proposition 4.** Let the forecast be $p=\hat\mu$ with
+$\mathbb{E}[\hat\mu]=\mu$ and relative standard deviation $\delta$, so
+$\mathrm{Var}(p)=(\delta\mu)^2$. Then
+$\mathrm{Var}(D-p)=\mathbb{E}[\mathrm{Var}(D\mid\mu)]+\mathrm{Var}(p)=(c\mu)^2+(\delta\mu)^2$,
+which is $(c\mu)^2$ at $\delta=0$. The standard deviation — and, for a
+location–scale family, the mean absolute deviation exactly — therefore inflates by
+$\sqrt{1+(\delta/c)^2}$. ∎
+
+**Proposition 5.** $C'(q)=(c_h+c_s)F(q)-c_s$ and $C''(q)=(c_h+c_s)f(q)>0$, so
+$C'(q^{*})=0$ with $q^{*}=F^{-1}\!\big(c_s/(c_h+c_s)\big)$. Taylor's theorem at
+$q^{*}$, with $q=q^{*}(1+\varepsilon)$, gives
+$C(q)-C(q^{*})=\tfrac12C''(q^{*})(q^{*}\varepsilon)^2+o(\varepsilon^2)$. For integer
+demand $C$ is piecewise linear and the expansion is an order statement only;
+§5 reports the exact penalties. ∎
 
 ## References
 
