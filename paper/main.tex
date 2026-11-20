@@ -1,980 +1,269 @@
-\documentclass[11pt]{article}
-\usepackage[margin=1in]{geometry}
-\usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
-\usepackage{amsmath,amssymb}
-\usepackage{booktabs}
-\usepackage{graphicx}
-\usepackage{microtype}
-\usepackage[round]{natbib}
-\usepackage[hidelinks]{hyperref}
-\usepackage{caption}
-\captionsetup{font=small,labelfont=bf}
-\graphicspath{{../results/}{figures/}{./}}
-
-\newcommand{\E}{\mathbb{E}}
-
-\title{\bfseries De-censoring Has a Ceiling, and It Is Low:\\
-an Information Bound for Censored Retail Demand}
-% Draft v4 --- submission candidate, content freeze 2026-11-20.
-% TODO before submission: author block, affiliation, corresponding author.
-\author{[First Author]\\[2pt] [Affiliation]\\[2pt] \texttt{[email]}}
-\date{}
-
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=26mm,top=20mm,bottom=20mm]{geometry}
+\usepackage{amsmath,amssymb,booktabs,graphicx,hyperref}
+\hypersetup{hidelinks,pdftitle={What Hourly Stockout Records Reveal About Retail Demand}}
+\urlstyle{same}
+\setlength{\emergencystretch}{2em}
+\setlength{\parindent}{1.3em}
+\setlength{\parskip}{2pt}
+\setlength{\abovecaptionskip}{5pt}
+\setlength{\belowcaptionskip}{5pt}
+\raggedbottom
 \begin{document}
-\maketitle
+\begin{center}{\LARGE\bfseries What Hourly Stockout Records Reveal\\About Retail Demand\par}\end{center}
 
-\begin{abstract}
-\noindent
-Retail demand is censored by inventory, and a 2025--2026 literature on the
-FreshRetailNet-50K benchmark competes on forecast accuracy. We ask how much
-accuracy is available. At the benchmark's mean severity, a censored day retains
-22--58\% of a clean day's Fisher information: 90 days are worth 68, a quarter of
-the level's information is destroyed, and the Cram\'er--Rao floor on any unbiased
-per-SKU level estimate is 7.0\%. Eleven methods, from linear interpolation to a
-deep imputer, span 35 percentage points of bias but, with the bias removed, only
-1.1 of WAPE; the correlation of $|\text{bias}|$ with WAPE (0.94) is real and not
-causal. Once bias is corrected, error sits at a floor near 20 WAPE and no method
-has gone below it. The decision layer is not bounded this way: ordering at the
-newsvendor quantile instead of the mean moves lost units by $16.8\times$
-($18.7\times$ with a de-censored history), an order of magnitude more than the
-entire reconstruction question, while the floor's own level error is a
-second-order cost at the order point. De-censoring is worth doing to remove bias;
-it is not worth funding to chase accuracy.
+
+\begin{abstract}\noindent
+
+An hour without stock can remove very different amounts of demand at opening time and at peak trading time. We examine what hourly availability records can tell us about both the precision of a demand-level estimate and the value of reconstructing a sales history. We derive Fisher information for two observation mechanisms with the same expected lost share, a daily stock cap and independent thinning of purchases. Applied to 1,500 high-volume FreshRetailNet-50K store--product series, the inferred number of effective days depends on the assumed count scale and observation mechanism. We assess the empirical value of hourly records by applying historical stockout patterns to 5,711 fully stocked days with observable sales. Weighting unavailable hours by their usual share of sales reduces reconstruction error from 12.61\% to 11.16\%. On the official forecast week, volume-weighted Tobit reconstruction reduces weighted absolute percentage error from 23.42\% for raw sales to 20.46\%, with aggregate bias of \ensuremath{-}0.33\%. It also improves on raw sales in the preceding week, although interpolation is more accurate there. Hourly records help locate missing volume; the resulting gain in forecast accuracy depends on the comparison method and evaluation window.
+
 \end{abstract}
-\noindent\textbf{Keywords:} censored demand; unconstraining; Fisher information;
-Cram\'er--Rao bound; relative efficiency; newsvendor quantile; pinball loss.
+\noindent \textbf{Keywords}: censored demand; Fisher information; negative binomial distribution; stockout severity; retail forecasting; quantile loss
 
-\section{The claim}
+\section{Introduction}
 
-Two literatures describe the same defect. Operations research calls it
-\emph{unconstraining} and estimates a demand distribution from censored sales
-\citep{nahmias1994,talluri2004,vulcano2012,tobin1958,kaplan1958}. Machine
-learning calls it \emph{latent demand recovery} and imputes the missing days
-\citep{du2023,wu2023,nie2024}. Both are judged by forecast error. On
-FreshRetailNet-50K \citep{wang2025} the recent reports are: bias moving from
-$-8.23\%$ to $-2.62\%$ with inverse-Mills-ratio recovery \citep{azar2026};
-$-8.1\%$ to $-1.3\%$ with an hourly censoring-aware model \citep{cadre2026}; and
-a relational model finding that recovery alone does not improve WAPE
-\citep{chen2025}.
+A store can sell the same daily quantity in two quite different circumstances. One product sells steadily until closing; another sells out before the busiest hour. The daily sales total obscures this distinction. An hourly stock log identifies when the second product was unavailable, but customers who left without buying do not appear in the transaction record. The practical question is how much of that gap the timing of a stockout can explain.
 
-Bias moves a lot; accuracy moves a little. That pattern is not a property of the
-methods. It is a property of the information the censoring left, and this paper
-measures it.
+Research on lost-sales inventory models established how a known stock limit enters a censored-demand likelihood \cite{ref1}. FreshRetailNet-50K makes a different observation available at scale: it records hourly sales and stock status for 50,000 store--product series. Wang et al. used those records to recover latent demand before fitting a forecaster \cite{ref2}. Azar compared recovery and forecast calibration in a forecast-to-inventory pipeline and reported the distinction between sales-based operating metrics and latent-demand profit \cite{ref3}. Yin et al. evaluated hourly recovery using stockout flags, lower-bound constraints and controlled re-censoring \cite{ref4}. These studies provide evidence for reconstruction. Their aggregate forecasting results cannot determine how much the clock time of an interruption adds beyond its duration.
 
-\paragraph{Claim.} The accuracy gains available from de-censoring are bounded by
-how much information the censoring left, and that bound is low. The bias is the
-part that is both large and removable; the residual error is neither.
+We study that narrower question in two stages. First, we express information about a constant demand level in equivalent fully observed days. Two explicit observation mechanisms show why the same expected lost share need not imply the same information loss. Second, we use historical interruption patterns to hide sales on previously fully stocked days. This permits a direct comparison of hour-count and volume-weighted corrections against an observable target. We then ask whether that difference persists after the reconstructed history has passed through a forecaster and an inventory rule. We keep the three outcomes in their natural units: relative standard error for a level, absolute forecast error relative to sales volume, and a cost index for an inventory scenario.
 
-\paragraph{What this paper is, and is not.} It is not a new reconstruction
-method, and it does not claim to beat any of the eleven it compares---on this
-protocol it wins by $0.2$ points, and says so. It is an accounting paper: it
-computes what the censoring destroyed, prices the residue in the metric the field
-optimises, and shows that the differences the field reports are the part the
-bound leaves free. The method slot on this benchmark is already occupied three
-times over, which is why a fourth estimator is the wrong contribution here
-(Table~\ref{tab:prior}).
+\section{Information about a demand level}
 
-\begin{table}[t]
-\centering\small
-\caption{What occupies the method slot on FreshRetailNet-50K, and what each
-leaves open.}
-\label{tab:prior}
-\begin{tabular}{@{}p{2.6cm}p{4.3cm}p{4.1cm}p{4.1cm}@{}}
-\toprule
-work & what it reports & what it occupies & what it leaves \\
+\subsection{Observing a daily stock cap}
+
+Let independent daily demands \(D_t\) have the negative binomial distribution NB2 with fixed mean \(\mu>0\), known size \(k>0\) and variance \(V=\mu+\mu^2/k\). A fully observed count \(d\) has score \(U(d)=(d-\mu)/V\) for \(\mu\) and information \(I_0=1/V\). Suppose a known cap \(c\) is set before demand is realized, and only \(Y=\min(D,c)\) is observed. We condition on the cap and hold it fixed when differentiating the likelihood. Fixed exogenous caps permit this calculation; inventories responding to unobserved demand signals would require a joint observation model.
+
+Write \(p_d=P(D=d)\), \(m=\lceil c\rceil\) and \(T_m=P(D\ge m)\). For \(0<c<\infty\), counts below \(m\) are distinguished and the remaining counts generate one outcome. Its score is the conditional expectation of the complete-data score. Hence the information in the observation is
+
+\[
+I_c=\sum_{d=0}^{m-1}p_d U(d)^2+
+       \frac{\left(\sum_{d=m}^{\infty}p_d U(d)\right)^2}{T_m}.
+\]
+
+The missing-information identity \cite{ref5} gives a useful interpretation. The loss \(I_0-I_c\) equals \(T_m\,\mathrm{Var}(U(D)\mid D\ge m)\). Even if a stockout is frequent, its information cost depends on how much the unobserved counts differ within the pooled tail. Lowering the cap merges previously distinguishable outcomes, so information can only decrease. In particular, a cap of 2.4 reveals a count of two exactly and pools counts of three or more. The ceiling operation matters for slow-moving products. We set \(I_c=0\) at \(c=0\) and \(I_c=I_0\) in the absence of a cap.
+
+To compare days at the same \emph{expected} lost share \(s\), choose a reference cap satisfying \(E[\min(D,c)]=(1-s)\mu\). Such a cap exists and is unique for \(0<s<1\): the left side is the integral of \(P(D>x)\) from zero to \(c\), which increases continuously to \(\mu\). At integer \(j\), it equals \(\sum_{u=1}^jP(D\ge u)\). Searching these partial sums yields the first pooled integer directly. The reference cap depends on the chosen parameter value; the likelihood derivative above still describes a fixed-cap experiment.
+
+\begin{figure}[htbp]\centering
+\includegraphics[width=.78\linewidth]{figures/retention_v5.png}
+\caption{Fraction of level information retained at a known stock cap for NB2 demand with size 60. The expected lost share indexes the horizontal axis; steps occur when a different set of integer counts becomes distinguishable.}\end{figure}
+
+At \(s=0.32\) and \(k=60\), the retained fraction \(I_c/I_0\) is 0.877 for a mean count of 1, 0.542 for a mean of 5 and 0.299 for a mean of 20 (Figure 1). For the low-count process a positive cap still distinguishes a zero from a positive day. At a higher mean, many different positive counts can produce the same capped sale. A lost-volume percentage alone therefore cannot specify a retained-information percentage.
+
+\subsection{Observing independently thinned purchases}
+
+A second experiment assigns each of the day\textquotesingle s \(D\) units an independent probability \(a=1-s\) of being observed. Conditional on \(D\), the recorded quantity is binomial with parameters \(D\) and \(a\). This represents exogenous unavailability when purchase times are independent given the day\textquotesingle s intensity and the available hours contain a known share \(a\) of that intensity. A stockout triggered by a burst of purchases would violate this assumption.
+
+The Poisson--gamma representation of NB2 gives the information in closed form. Thinning multiplies the conditional Poisson rate by \(a\), preserving the gamma shape \(k\). The observed count therefore has mean \(a\mu\) and variance \(a\mu+(a\mu)^2/k\). Applying the chain rule to its score gives the retention ratio
+
+\[
+\rho_{\mathrm{thin}}=\frac{a(1+\mu/k)}{1+a\mu/k}.
+\]
+
+Both mechanisms preserve an expected fraction \(a\) of sales. They partition the possible observations differently. With a Poisson limit, thinning retains fraction \(a\) of the full information, whereas cap retention still depends on the count level. At \(s=0.32\), \(\mu=20\) and \(k=60\), thinning retains about 0.739 of the information, compared with 0.299 under the cap. Observing the same sales fraction does not identify which experiment generated it.
+
+\subsection{Effective days and the estimand}
+
+For either mechanism let \(\rho_t\) denote retention on day \(t\). Independent observations have additive Fisher information because their scores have mean zero and their cross-products have mean zero. The sum \(n_{\mathrm{eff}}=\sum_t\rho_t\) is thus the number of fully observed days with the same Fisher information. For a regular unbiased estimator of this series\textquotesingle{} constant mean, the Cramér--Rao inequality \cite{ref6} gives
+
+\[
+\frac{\mathrm{sd}(\widehat\mu)}{\mu}\ \ge\
+\sqrt{\frac{1/\mu+1/k}{n_{\mathrm{eff}}}}.
+\]
+
+This inequality compares local precision in a specified experiment. Forecasts of future days have an additional source of variation even when the mean is known. Forecast features can also explain changes in demand that the constant-level experiment excludes. We therefore measure forecast loss on future observations separately. Borrowing information across products, estimating an unknown dispersion or inferring an endogenous stock policy changes the experiment.
+
+\section{Data and evaluation}
+
+\subsection{Sampling and availability}
+
+The public data contain 90 training days from 28 March to 25 June 2024 and an official evaluation week from 26 June to 2 July. Sales are globally scaled quantities; the release identifies no physical conversion coefficient \cite{ref2,ref7}. For each forecast origin we ranked store--product series by cumulative observed sales through that origin, then sampled 1,500 without replacement from the top 4,000 using seed 0. The official sample includes 609 stores, 77 products, 17 cities and 16 first-level product categories. A unit of analysis is a product at a particular store. Ranking by sales selects commercially active series and also depends on availability.
+
+A training day is flagged when any hour from 06:00 to 22:00 (end exclusive) is out of stock. For each series, we summed sales separately by hour across unflagged training days and divided by the total over all 24 hours. We used the pooled hourly profile when a series had fewer than five unflagged days or no sales on those days. The volume-weighted severity is the sum of the profile weights of flagged business hours. The duration measure is the number of flagged hours divided by 16. Across the official training panel, 52.68\% of days were flagged. On flagged days the mean volume-weighted share was 0.318, compared with a mean duration share of 0.388. These are proxies for exposure. Lost sales are unobserved on naturally flagged days.
+
+For the information scenarios, we set \(\mu\) to the mean sales on unflagged training days multiplied by an assumed number of count units per released sales unit. Multipliers 1 and 10 illustrate the dependence on the unpublished conversion. We varied \(k\) between 10, 60 and 2,000 and held each series\textquotesingle{} observed severity pattern fixed. These design calculations use a plug-in mean and an estimated hourly profile. They do not include the uncertainty in either input.
+
+\subsection{A reconstruction check with known hourly sales}
+
+We took each fully stocked day in the official evaluation week and drew one flagged day from the same series\textquotesingle{} training history. We hid the evaluation day\textquotesingle s sales in the business hours flagged on the drawn day. The sum of the 24 original hourly sales is then a known reconstruction target. This preserves actual within-day stockout patterns while making their assignment independent of the evaluation day\textquotesingle s demand conditional on series. We repeated the assignment 20 times with seed 2026 and kept all repetitions for a series together.
+
+Let \(L_i\) be series \(i\)\textquotesingle s mean sales on fully stocked training days, \(B\) the hidden business hours and \(Y_{\rm vis}\) the day\textquotesingle s remaining sales. The duration version restores \(L_i|B|/16\) to \(Y_{\rm vis}\); the profile version restores \(L_i\sum_{h\in B}w_{ih}\), where \(w_{ih}\) is the training share for hour \(h\). Both use exactly the same sales level, dates and masks. A zero-correction baseline keeps \(Y_{\rm vis}\). We sum absolute errors and divide by total original volume, averaging across mask draws. The design tests a component of reconstruction on days for which ground truth exists. It does not recreate the dependence of genuine stockouts on unexpectedly strong demand.
+
+\subsection{Forecasts, paired comparisons and ordering}
+
+Five histories enter the same forecasting procedure. The first uses reported sales throughout. The second interpolates linearly between fully stocked days, extending the nearest observed value at either end. The remaining three use Gaussian Tobit-style reconstruction \cite{ref8}. A per-series regression includes an intercept, a linear trend, two weekly sine--cosine pairs and a discount indicator. At a flagged observation \(y\), the fit assigns weight \(1-s\) to the exact-observation log density and weight \(s\) to the log probability above \(y\). Its working completed value blends \(y\) with the Gaussian upper-tail mean using those same weights. This weighted criterion is a reconstruction heuristic. Its weights come from a binary flag (\(s=1\) on every flagged day), duration, or the hourly volume profile. The NB2 information calculation and this Gaussian reconstruction serve different estimands.
+
+For each of seven horizons we fitted a separate histogram gradient-boosted tree ensemble across series, using the reconstructed history for both lag features and training targets. The model used up to 50 boosting iterations, learning rate 0.10, up to 31 leaves, and seed 0. Inputs included sales lags through 28 days, rolling summaries, recent stockout frequency, time features, series identifier and scale, and the target-day discount indicator. The exercise conditions on the discount schedule being known at forecast time. All reconstruction and training used the history available at the forecast origin. Internal training examples share a retrospective reconstruction of that history.
+
+We evaluated point forecasts on fully stocked business days. With error \(e=\widehat y-y\), weighted absolute percentage error (WAPE) is \(100\sum|e|/\sum y\), and signed aggregate bias is \(100\sum e/\sum y\). Zero-sales observations contribute their errors. For a sensitivity check, we moved the forecast origin back seven days, repeating series selection, profile estimation, reconstruction and model fitting with 83 training days to predict 19--25 June. The two panels can differ. Both weeks had been available during manuscript development; comparisons are exploratory.
+
+For paired uncertainty intervals, we resampled stores with replacement 2,000 times, retaining every series, date and prediction in a selected store. Each draw recomputes the ratio of summed paired error differences to summed sales. We also report intervals resampling products to assess dependence across stores selling the same product. The two sets of percentile intervals describe variation across one clustering dimension at a time, conditional on the fitted forecasts and dates. Neither resampling scheme estimates variation over future weeks. Intervals are pointwise across comparisons.
+
+For the official week we also fitted quantile regressions with the same features at \(\tau=0.50,0.90,0.98\). Their normalized pinball loss is \(100\sum\max(\tau u,(\tau-1)u)/\sum y\), where \(u=y-\widehat q_\tau\) \cite{ref9,ref10}. In a one-period inventory problem with underage cost 1 and overage cost 0.02, the critical fractile is \(1/1.02\approx0.98\). To examine the effect of lead time we replayed all seven days of \emph{recorded sales} under a separate replenishment rule. The reorder point and target stock equaled 1.5 and 3 times the average of the seven daily quantile forecasts. Initial on-hand stock and the total already in transit each equaled the target. Arrivals were spread over three days. After each day\textquotesingle s sales, the rule triggered on end-of-day stock and ordered the gap to target for delivery three days later, without netting outstanding orders. We charged 0.02 per unit of closing inventory per day and 1 per unfilled unit. This is a short simulation on a fixed sales path, including flagged days, with policy-dependent starting stock.
+
+\section{Results}
+
+\subsection{Sensitivity of the level-information calculation}
+
+The median series had 44 fully stocked days in the 90-day history. Partially observed days contributed additional information in every scenario (Table 1). At scale 1 and size 60, the cap and thinning experiments yield nearly identical median precision bounds. At scale 10 and the same size, effective days diverge by more than 15 days, even though both experiments use exactly the same hourly stock records. Under the cap, a larger count scale can reduce the effective day count while improving relative precision because a clean high-count day is itself more informative in relative terms.
+
+\begin{table}[htbp]\centering\small
+\caption{Median effective days and lower bounds on relative standard error (RSE) of an unbiased level estimate. Each entry is a median over 1,500 series, calculated after evaluating each series at its own mean and availability profile.}
+
+
+\begin{tabular}{@{}rrrrrr@{}}\toprule
+
+Count scale & Size \(k\) & Cap days & Cap RSE (\%) & Thinning days & Thinning RSE (\%) \\
+
 \midrule
-Azar 2026 \citep{azar2026} & inverse-Mills ratio; bias $-8.23\%\to-2.62\%$; a
-leakage-free pipeline & a working method, an evaluation protocol & no bound on
-what remains \\
-Yin et al.\ 2026 \citep{cadre2026} & stock-out flags as lower bounds; hourly
-separation of censoring & censoring-aware feature engineering & no accuracy
-ceiling \\
-Chen \& Jin 2025 \citep{chen2025} & relational model; recovery alone does not
-improve WAPE & the observation this paper formalises & no quantification of
-why \\
-\bottomrule
-\end{tabular}
-\end{table}
 
-The last row is the one to keep in view: the field has already noticed that
-recovery does not buy accuracy. What it has not done is compute how much accuracy
-was ever there to buy. That is the whole claim, and \S4 states the two ways it
-can be falsified.
+1 & 10 & 76.52 & 7.41 & 78.27 & 7.32 \\
 
-\paragraph{Lineage, and what is new.} The arithmetic is not new. The relative
-efficiency of a censored sample against a complete one is the classical
-Fisher-information calculation \citep{lehmann1998}, and the censored likelihoods
-compared here are Tobin's and Kaplan--Meier's \citep{tobin1958,kaplan1958}.
-Reading a stock-out as \emph{coarse} data rather than as missing data is also
-established: a censored day is a coarsening of the demand variable, and the
-ignorability theory for coarse data \citep{heitjan1991} is precisely the garbling
-that Proposition~3 invokes; the lifetime-data treatment of censored likelihoods is
-standard \citep{lawless2003}. What is new is the \emph{accounting}, not the
-algebra: (i) the quantity is computed on this benchmark and turned into a ladder of
-logging rungs whose next step is worth 10--28 points of bias; (ii) the same level
-error is priced twice---second order in newsvendor cost, first order through the
-ordering quantile (Proposition~5)---which separates the two layers by an order of
-magnitude; and (iii) the ceiling is stated as a falsifiable prediction, so a method
-that beats the floor is more likely to be leaking the holdout than to be
-informative. A reader who knows the classical literature should read the
-contribution as a measurement plus a decision-theoretic reading, not as a new
-estimator.
+1 & 60 & 75.98 & 6.65 & 76.74 & 6.61 \\
 
-\section{How much information a censored day carries}
+1 & 2,000 & 75.87 & 6.49 & 76.38 & 6.47 \\
 
-\paragraph{Model.} A SKU's demand on day $t$ is $D_t\sim\mathrm{NB2}(\mu,k)$, with
-mean $\mu$ and dispersion $k$ (variance $\mu+\mu^2/k$); days are conditionally
-independent given $\mu$. The warehouse stocks $C_t$ units before demand is
-realised and records $Y_t=\min(D_t,C_t)$, together with the stock status that
-fixes $C_t$. The object of interest is the level $\mu$: the estimator's job is to
-report it, not to reconstruct the individual unobserved days.
+10 & 10 & 69.24 & 4.39 & 84.13 & 3.98 \\
 
-We work under five assumptions. Each is a scope restriction that a reader is
-entitled to check rather than a technicality:
-\begin{enumerate}\itemsep1pt
-\item[(A1)] $D_t\mid\mu$ is negative binomial with known dispersion $k$,
-  $\mu\in(0,\infty)$, and days are independent given $\mu$.
-\item[(A2)] $Y_t=\min(D_t,C_t)$ with $C_t\perp D_t$: the stock level is set by a
-  policy, not by the demand it faces, so censoring is not informative about $\mu$
-  beyond the recorded severity.
-\item[(A3)] the data record $s_t=1-\E[\min(D_t,C_t)]/\mu\in[0,1]$, the share of the
-  day's expected volume that was unreachable; $s_t=0$ on a fully-stocked day.
-\item[(A4)] $\mu$ is constant over the accounting window; the estimand is the
-  window-average level.
-\item[(A5)] $p(\cdot;\mu)$ is differentiable in $\mu$ and dominated, so Fisher
-  information and the Cram\'er--Rao bound apply.
-\end{enumerate}
-\emph{Scope remark.} (A1)--(A5) make the bound a statement about
-\emph{per-SKU estimation from that SKU's own history}. A pooled estimator borrows
-strength across series and is not covered. This is a restriction of the claim, not
-a caveat to be argued away.
+10 & 60 & 63.89 & 2.78 & 79.22 & 2.48 \\
 
-For a day observed with stock level $c$, the observation is a mixture: values
-below $c$ are seen exactly, values at or above $c$ collapse into the event
-$D \ge c$. Under (A1) the Fisher information about $\mu$ is
-\begin{equation}
-I(c,\mu)=\sum_{y<c}p(y)\left(\frac{\partial\log p(y)}{\partial\mu}\right)^{2}
-+ P(D\ge c)\left(\frac{\partial\log P(D\ge c)}{\partial\mu}\right)^{2},
-\end{equation}
-and the \emph{retention} $\rho=I(c,\mu)/I(\infty,\mu)$ is the fraction of a clean
-day's information that survives---in the classical language, the
-\emph{relative efficiency} of a censored observation against a complete one. Under
-negative-binomial demand, $\rho$ depends on the level $\mu$ and on the severity $s$
-(the fraction of volume unreachable, which fixes $c$ through
-$\E[\min(D,c)]=(1-s)\mu$).
+10 & 2,000 & 61.55 & 2.30 & 76.50 & 2.06 \\
 
-\paragraph{Proposition 1 (severity identifies the cap).} Under (A1)--(A3), the map
-$c\mapsto\E[\min(D,c)]$ is continuous and non-decreasing with limit $\mu$ as
-$c\to\infty$, and strictly increasing wherever $P(D\ge c)>0$. Hence for every
-$s\in(0,1)$ there is a unique implicit cap $c(s)$ with
-$\E[\min(D,c(s))]=(1-s)\mu$.
+\bottomrule\end{tabular}\end{table}
 
-\paragraph{Proposition 2 (information is additive).} Under (A1), (A2), (A5) the
-sample's Fisher information about $\mu$ is
-$I_n(\mu)=I_1(\mu)\sum_t\rho(s_t)$, where $I_1$ is a clean day's information.
-Writing $n_{\text{eff}}=\sum_t\rho(s_t)$, the sample is exactly informationally
-equivalent to $n_{\text{eff}}$ clean days: the ``effective days'' of \S3 are a
-quantity, not an analogy.
+\subsection{How much does stockout timing explain?}
 
-\paragraph{Corollary (the floor).} Under (A1)--(A5), every unbiased estimator of
-$\mu$ satisfies $\mathrm{Var}(\hat\mu)\ge 1/(I_1(\mu)n_{\text{eff}})$, hence a
-relative standard error of at least
-$1/(\mu\sqrt{I_1(\mu)n_{\text{eff}}})$. At the benchmark medians
-($n_{\text{eff}}=67.8$) this is 7.0\%.
+Across the 5,711 fully stocked evaluation days, the imposed masks hid 33.98\% of hourly sales volume on average in aggregate. Restoring the typical volume of an average business hour reduced reconstruction WAPE to 12.61\%. Giving the same hours their own historical weights reduced it further to 11.16\%. The paired difference of \ensuremath{-}1.45 points had a store-clustered 95\% interval of {[}\ensuremath{-}1.68, \ensuremath{-}1.22{]} and a product-clustered interval of {[}\ensuremath{-}2.77, \ensuremath{-}0.67{]}. The profile correction still underestimated volume by 3.33\% in aggregate. Locating the hours of the interruption improves reconstruction even when both corrections use the same estimate of the typical day\textquotesingle s level. The remaining shortfall can include differences between the evaluation day\textquotesingle s sales and that training level.
 
-\paragraph{Proposition 3 (retention falls with severity).} Under (A1)--(A2),
-$\rho(s)$ is non-increasing in $s$ and strictly decreasing wherever
-$P(D\ge c(s))>0$. The dependence on $\mu$ carries no such monotonicity: it is
-non-monotone in the sparse regime, and \S3 reports it as computed rather than as
-proved.
+\subsection{Forecast accuracy across two weeks}
 
-Proofs are in Appendix~\ref{app:proofs}.
+On the official week, all 1,500 series contributed a fully stocked day and 1,498 contributed positive sales on those days. Duration weighting produced the lowest WAPE in this comparison; volume weighting produced the smallest absolute signed bias (Table 2). Giving every flagged day full censoring weight brought the official-week bias to +10.56\%, overshooting the correction needed for partially available days. On the earlier week, 1,420 series contributed 5,530 fully stocked observations. Interpolation then gave the lowest WAPE; even the profile correction underforecast by 8.44\%. A near-zero aggregate bias in the official week therefore does not establish persistent calibration.
 
-\begin{figure}[t]
-\centering
-\includegraphics[width=.85\linewidth]{p5_example_series.png}
-\caption{The problem in one picture: one SKU with 61\% stock-out days and a mean
-severity of 0.35. Bars are recorded sales, the line is the severity-weighted
-reconstruction, and the thin vertical lines mark stock-out days. The
-reconstruction adds 9.0\% over the window, on exactly the days the bars are
-short---and the demand it restores was never observed, which is why \S3 scores
-only fully-stocked days.}
-\label{fig:example}
-\end{figure}
+\begin{table}[htbp]\centering\small
+\caption{Point forecasts on fully stocked evaluation days. All values are percentages. Both panels contain 1,500 training series selected separately at their forecast origins.}
 
-\begin{figure}[t]
-\centering
-\includegraphics[width=.8\linewidth]{p1_information_curves.png}
-\caption{Information retained by a censored day. Retention is a step function of
-severity because demand is integer: whenever the implied stock level crosses an
-integer, the censoring event changes and $\rho$ jumps. The markers are the values
-quoted in the text, at the benchmark's mean severity.}
-\label{fig:info}
-\end{figure}
 
-Retention is a \emph{step} function of severity, not a smooth one, because demand
-is counted in whole units: every time the implied stock level crosses an integer
-the censoring event changes and $\rho$ jumps (Fig.~\ref{fig:info}). At $s=0.32$,
-the benchmark's mean severity, $\rho$ is 0.58 at $\mu=1$, 0.34 at $\mu=5$ and 0.22
-at $\mu=20$ (marked). Dispersion matters much less than the level: at $\mu=5$ and
-$s=0.32$, $\rho$ moves only from 0.374 ($k=10$) to 0.334 ($k\to\infty$), so the
-bound is robust to a mis-specified tail. The computation is exact and we validate
-it against Monte Carlo estimation of the score variance (agreement to $10^{-3}$ on
-five settings).
+\begin{tabular}{@{}lrrrr@{}}\toprule
 
-\section{Accounting on the benchmark}
+Training history & Official WAPE & Official bias & Earlier WAPE & Earlier bias \\
 
-We sample 1{,}500 of the 50{,}000 series (52.7\% stock-out days) and compute per
-series the effective sample size $n_{\text{eff}}=\sum_t \rho(s_t)$ and the
-Cram\'er--Rao floor on the relative standard error of the level,
-$1/\sqrt{n_{\text{eff}}I_1(\mu)}/\mu$.
-
-\begin{table}[t]
-\centering
-\small
-\caption{Information accounting per series (medians over 1{,}500 SKUs).}
-\label{tab:acct}
-\begin{tabular}{lr}
-\toprule
-quantity & median \\
 \midrule
-nominal days & 90 \\
-clean days & 44 \\
-\textbf{effective days} & \textbf{67.8} \\
-information destroyed & 24.7\% \\
-CR floor on level SE & 7.0\% \ (p90 8.3\%) \\
-\bottomrule
-\end{tabular}
-\end{table}
 
-Censoring destroys a quarter of the level's information. The floor on a
-series-level estimate is 7\%.
+Reported sales & 23.42 & \ensuremath{-}7.11 & 29.73 & \ensuremath{-}14.74 \\
 
-\begin{figure}[t]
-\centering
-\includegraphics[width=.8\linewidth]{p2_bound_vs_level.png}
-\caption{The floor is not one number across the panel: it falls from about 8.0\%
-for the slowest quartile of series to 5.5\% for the fastest, because a
-low-volume SKU carries less information per day to begin with. The panel is drawn
-from the heavy end of the catalogue, so the 7\% median is a lower bound for a
-real catalogue rather than a typical value.}
-\label{fig:level}
-\end{figure}
+Linear interpolation & 21.14 & +1.30 & 24.65 & \ensuremath{-}9.04 \\
 
-The floor is not one number across the panel (Fig.~\ref{fig:level}): it falls from
-about 8.0\% for the slowest quartile of series to 5.5\% for the fastest, because a
-low-volume SKU carries less information per day to begin with. Within this panel
-only 0.2\% of series exceed a 10\% floor---a fact worth stating plainly, because
-the panel is drawn from the heavy end of the catalogue (the 4{,}000 best-selling
-series). The long tail, where a series sells a few units a week, is absent here
-and would sit strictly above these curves; the 7\% floor is therefore a
-\emph{lower} bound for a real catalogue. That is the conservative direction for a
-ceiling claim, and the opposite direction for a practitioner carrying many slow
-movers.
+Binary Tobit & 23.26 & +10.56 & 25.87 & +3.75 \\
 
-\subsection{The severity definition is a choice, and it moves bias}
+Duration-weighted Tobit & 20.41 & +0.92 & 25.06 & \ensuremath{-}7.70 \\
 
-The accounting needs a number for the severity of a censored day, and the data
-offer two: the \emph{share of business hours} without stock, or the \emph{share of
-the day's volume} that was unreachable. The second requires the SKU's hourly sales
-profile; the first requires nothing. The panel supports both, so the choice can be
-priced. Three definitions are compared: hours out of 16; volume weighted with the
-global hourly profile; volume weighted with the SKU's own profile (the one used
-throughout this paper).
+Volume-weighted Tobit & 20.46 & \ensuremath{-}0.33 & 25.60 & \ensuremath{-}8.44 \\
 
-\begin{table}[h]
-\centering\small
-\caption{Severity ablation on the same holdout, grader and forecaster; only the
-severity column changes. Mean WAPE is over the three severity-weighted estimators.}
-\label{tab:severity}
-\begin{tabular}{lrrrrr}
-\toprule
-severity definition & mean on censored & KM bias & Tobit bias & NB bias & mean WAPE \\
+\bottomrule\end{tabular}\end{table}
+
+The gain over reported sales appeared in both windows and under both cluster definitions (Table 3). The smaller gain over interpolation on the official week changed sign in the preceding week, and the product-clustered intervals included zero on both dates. Compared with duration weighting, the better reconstruction of artificially hidden hours did not translate into a lower forecast WAPE in either week. Reconstruction accuracy and forecast bias each reveal something that the ranking by WAPE misses.
+
+\begin{table}[htbp]\centering\small
+\caption{Paired WAPE differences in percentage points, volume-weighted Tobit minus the named comparator. Brackets give 95\% percentile intervals.}
+
+
+\begin{tabular}{@{}llrll@{}}\toprule
+
+Evaluation week & Comparator & Difference & By store & By product \\
+
 \midrule
-hours / 16 & 0.388 & $+4.08\%$ & $+0.92\%$ & $+4.30\%$ & 21.24 \\
-volume, global profile & 0.325 & $+3.72\%$ & $+0.05\%$ & $+2.24\%$ & 21.13 \\
-volume, own profile & \textbf{0.318} & $\mathbf{+3.19\%}$ & $\mathbf{-0.33\%}$ &
-$\mathbf{+1.55\%}$ & \textbf{20.98} \\
-\bottomrule
-\end{tabular}
-\end{table}
 
-Counting hours overstates severity by 22\% (0.388 against 0.318), because sales
-concentrate in the middle of the day: one missing hour at 9\,a.m.\ destroys far
-more demand than one at 8\,p.m. The consequence is what the model predicts.
-Severity enters through the cap (Proposition~1), so a mis-stated severity shows up
-as \emph{bias} first---the hour-count version carries $+0.9$ to $+4.3$ points of
-bias where the volume version carries $-0.3$ to $+3.2$---while accuracy moves by at
-most 0.5 WAPE, at the resolution of the design (\S8). Two conclusions follow.
-First, the severity definition belongs in the bias column, not the accuracy column,
-exactly like the reconstruction question it feeds. Second, the self-calibrated
-profile (own against global) is worth 0.1--0.3 WAPE and up to 0.7 bias points:
-real, reproducible, and small---which is the honest size of the ``hourly sales''
-rung in the logging ladder of \S\ref{sec:ladder}.
+Official & Reported sales & \ensuremath{-}2.96 & {[}\ensuremath{-}3.36, \ensuremath{-}2.55{]} & {[}\ensuremath{-}5.19, \ensuremath{-}0.94{]} \\
 
-\section{The ceiling is visible in the numbers}
+Official & Interpolation & \ensuremath{-}0.68 & {[}\ensuremath{-}1.13, \ensuremath{-}0.23{]} & {[}\ensuremath{-}1.96, +0.25{]} \\
 
-\begin{table}[t]
-\centering\small
-\caption{All eleven methods on the official holdout. \emph{fill} and \emph{lost}
-are the inventory simulation of \S5 (50:1 cost ratio, 3-day lead time); the two
-deep models are reported on accuracy only. A TimesNet baseline collapsed to 28.0
-WAPE ($-13.6\%$ bias) after normalisation and is quoted in the text rather than
-here. The full run takes 300\,s on a laptop CPU.}
-\label{tab:methods}
-\begin{tabular}{lrrrr}
-\toprule
-method & WAPE & bias & fill & lost \\
+Official & Duration weighting & +0.05 & {[}\ensuremath{-}0.12, +0.23{]} & {[}\ensuremath{-}0.82, +0.49{]} \\
+
+Earlier & Reported sales & \ensuremath{-}4.13 & {[}\ensuremath{-}4.53, \ensuremath{-}3.74{]} & {[}\ensuremath{-}5.76, \ensuremath{-}2.34{]} \\
+
+Earlier & Interpolation & +0.95 & {[}+0.38, +1.51{]} & {[}\ensuremath{-}1.10, +2.67{]} \\
+
+Earlier & Duration weighting & +0.54 & {[}+0.39, +0.70{]} & {[}+0.15, +0.82{]} \\
+
+\bottomrule\end{tabular}\end{table}
+
+A geographic breakdown gives some indication of how the panel average was formed. The largest city contained 867 of the 1,500 series; its official-week difference versus reported sales was \ensuremath{-}3.30 points. The two next-largest cities had differences of \ensuremath{-}2.45 (158 series) and \ensuremath{-}4.43 (145 series). In the four largest first-level categories, the differences ranged from \ensuremath{-}8.63 to \ensuremath{-}0.88 points. One smaller category, with 32 series, reversed the direction (+5.24). The supplement gives every subgroup, including those too small to support a stable comparison.
+
+\subsection{Forecasting upper quantiles and replaying an order rule}
+
+For all three quantiles, the volume-weighted history yielded the lowest pinball loss among the three histories examined (Table 4). At the median, interpolation also improved on raw sales. At the 0.98 quantile, interpolation increased loss by 5.3\% relative to raw sales, whereas volume weighting reduced it by 8.7\%. Thus two histories that gave similar absolute errors for point forecasts can behave differently in the upper tail.
+
+\begin{table}[htbp]\centering\small
+\caption{Official-week normalized pinball loss on fully stocked days and simulated outcomes on the entire recorded-sales path. Shortfall is in released sales units. The cost index combines shortage and holding charges.}
+
+
+\begin{tabular}{@{}lrrrr@{}}\toprule
+
+History & Quantile & Pinball & Shortfall & Cost index \\
+
 \midrule
-sales as demand & 23.4 & $-7.1\%$ & 0.865 & 6154 \\
-linear interpolation & 21.1 & $+1.3\%$ & 0.898 & 4643 \\
-gradient-boosted imputation & 21.3 & $+1.6\%$ & 0.901 & 4496 \\
-Kaplan--Meier (hard) & 28.8 & $+9.4\%$ & 0.899 & 4602 \\
-Tobit (hard) & 23.3 & $+10.6\%$ & 0.934 & 3023 \\
-negative binomial (hard) & 35.9 & $+28.0\%$ & 0.960 & 1815 \\
-Kaplan--Meier (severity) & 22.1 & $+3.2\%$ & 0.899 & 4604 \\
-Tobit (severity) & \textbf{20.5} & $\mathbf{-0.3\%}$ & 0.896 & 4723 \\
-negative binomial (severity) & \textbf{20.3} & $+1.5\%$ & 0.906 & 4271 \\
-SAITS (4 runs) & 21.4 & $+2.1\%$ & -- & -- \\
-ImputeFormer & 20.4 & $+4.3\%$ & -- & -- \\
-\bottomrule
-\end{tabular}
-\end{table}
 
-Table~\ref{tab:methods} puts all eleven methods in one place, on the official
-holdout. They span 20.3 to 35.9 WAPE and $-7.1\%$ to $+28.0\%$ bias, and the two
-axes are not independent: across the eleven,
-$\mathrm{corr}(|\text{bias}|,\text{WAPE})=0.94$ ($R^2=0.89$) with a fitted slope
-of 0.56 WAPE per point of absolute bias (Fig.~\ref{fig:plane})---almost all of the
-accuracy difference between methods \emph{is} their bias difference.
+Reported sales & 0.50 & 11.35 & 6,139 & 7,957 \\
 
-\begin{figure}[t]
-\centering
-\includegraphics[width=.8\linewidth]{p4_bias_accuracy.png}
-\caption{Bias against accuracy, all eleven methods. The four methods at the floor
-span 1.1 WAPE and differ only in bias; the methods that leave the floor are
-exactly the ones with a large bias. The correlation is tight and is not causal
-(see the two controlled checks in the text).}
-\label{fig:plane}
-\end{figure}
+Reported sales & 0.90 & 5.78 & 1,186 & 4,815 \\
 
-That is what the bound predicts. A method that removes bias entirely---the
-severity-weighted likelihood does, at $-0.3\%$---lands at 20.5 WAPE and stops
-there. A 325-second SAITS lands at 21.4 with $+2.1\%$ bias; ImputeFormer lands at
-20.4 with $+4.3\%$. The floor of the comparison is near 20.3, and the remaining
-twenty points are daily demand noise, not information about the level.
+Reported sales & 0.98 & 1.96 & 365 & 5,533 \\
 
-\textbf{What the bound costs, in WAPE.} Simulated against the same demand
-process (negative-binomial, 3{,}000 series, a known weekday structure), a random
-7\% level error---the size of the Cram\'er--Rao floor---raises WAPE by 1.0\% of
-its own value: $0.2$ points at the benchmark's 20.5.
+Interpolation & 0.50 & 10.82 & 5,408 & 7,439 \\
 
-\paragraph{Proposition 4 (what a level error can cost).} Suppose (i) the forecast is
-$p=\hat\mu$ with $\E[\hat\mu]=\mu$ and relative standard deviation $\delta$, and
-(ii) the demand family is location--scale, so its mean absolute deviation is
-proportional to its standard deviation. Then the forecast error decomposes as
-\begin{equation}
-\mathrm{Var}(D-p)=\underbrace{\E[\mathrm{Var}(D\mid\mu)]}_{(c\mu)^2}
-+\underbrace{\mathrm{Var}(p)}_{(\delta\mu)^2},
-\end{equation}
-with $c$ the conditional coefficient of variation of daily demand (measured on
-this panel: median $0.32$), and the relative inflation of the mean absolute error
-is exactly
-\begin{equation}
-\frac{\mathrm{MAD}(\delta)}{\mathrm{MAD}(0)}=\sqrt{1+(\delta/c)^2}.
-\end{equation}
-WAPE is the sample analogue of the MAD, normalised by realised rather than
-expected volume; the latter ratio is 1.00 at the panel median, which is why we
-state the bound for the MAD and use its sample analogue.
+Interpolation & 0.90 & 5.83 & 1,424 & 5,141 \\
 
-At the floor ($\delta=0.07$, $c=0.32$) this is $+2.3\%$, or $0.5$ points at
-20.5. The simulation says 0.2, the bound says 0.5, the spread between the best and
-worst honest method is 1.1: \emph{either number leaves most of the spread
-unexplained by level information, so it is reconstruction artifact}. The bound is
-falsifiable in the useful direction---a method that beats the floor by more than
-half a point has either found information the censoring destroyed or is leaking
-the holdout.
+Interpolation & 0.98 & 2.06 & 465 & 5,678 \\
 
-\begin{figure}[t]
-\centering
-\includegraphics[width=.8\linewidth]{p3_wape_budget.png}
-\caption{What a level error costs in WAPE. The bound is a curve; the three
-quantities the paper compares are points on it. The Cram\'er--Rao floor permits
-$+2.3\%$ inflation, the matched simulation measures $+1.0\%$, and the observed
-spread between the honest methods ($5.4\%$) would require a level error of about
-$10.6\%$---one and a half times the floor.}
-\label{fig:budget}
-\end{figure}
+Volume-weighted Tobit & 0.50 & 10.52 & 5,507 & 7,470 \\
 
-Fig.~\ref{fig:budget} reads those numbers against each other. At the floor the
-permitted inflation is 2.3\%; the matched simulation measures 1.0\%; and the
-\emph{observed} spread between the honest methods is 5.4\%, which the curve says
-would require a level error of about 10.6\%---1.5$\times$ the floor. Level
-uncertainty could explain the whole spread only if the effective level error were
-half again the largest any unbiased estimator can be forced into; at the floor it
-explains under half of the spread, and the simulation says a fifth.
+Volume-weighted Tobit & 0.90 & 5.33 & 1,025 & 4,650 \\
 
-The correlation of $0.94$ between $|\text{bias}|$ and WAPE is real
-but confounded: rescaling the naive pipeline's forecasts by 1.076 removes its
-entire $-7.5\%$ bias and recovers 0.3 of a 2.1-point gap, because the remaining
-error comes from a corrupted \emph{history}, not a corrupted level.
+Volume-weighted Tobit & 0.98 & 1.79 & 329 & 5,517 \\
 
-\textbf{The asymmetry is what should worry an operator.} A $-7\%$ level error
-costs nothing in L1 ($-0.13$ points: it moves predictions toward the median,
-where L1 is minimised), while a $+10\%$ error costs 1.6. Biased low is free for
-accuracy and expensive for shelves. A pipeline that reports WAPE is structurally
-inclined to under-forecast, which is the direction that empties shelves.
+\bottomrule\end{tabular}\end{table}
 
-The claim makes two falsifiable predictions. (i) No honest method should reach
-about 17 WAPE on this protocol: the level carries at most a couple of points, and
-it is already corrected. (ii) A method that beats the floor by a wide margin is
-more likely leaking the holdout than exploiting information that the Fisher
-bound says is not in the data.
+Moving from the median to the 0.98 quantile cut simulated shortfall sharply in every history, as the higher forecasts also supplied more inventory. For volume weighting, the shortfall fell from 5,507 to 329. The 0.90 policy, however, had a lower total cost than 0.98 for all three histories. In the volume-weighted case the extra holding charge outweighed the reduction from 1,025 to 329 unfilled units. A one-period critical fractile alone cannot determine which quantile to feed this multi-period rule.
 
-The run-to-run noise is the same size as the effect: SAITS scored 20.70, 21.46,
-21.64 and 21.70 over four seeds, so the between-method spread (1.1) is comparable
-to the within-model spread (1.0). Ranking methods on one run of this benchmark is
-not informative at the resolution the literature reports.
+\section{Discussion}
 
-A foundation model lands on the same floor. Zero-shot Chronos-Bolt
-\citep{ansari2024} on raw sales scores 23.4 WAPE with a $-9.8\%$ bias---worse than
-a plain gradient-boosted model, because it consumes the capped series and has no
-channel for the stock-out flag. Fed a de-censored history it scores 20.6 with
-$-4.2\%$. The model changed the level it was shown, and the level is the only
-thing that moved: 23.4 to 20.6 is the bias, not a modelling gain.
+The clearest evidence for the hourly record comes from the masking experiment. Suppose a system already records the number of unavailable hours. Adding their clock times gives a measurable improvement in estimating the hidden volume of otherwise observable days, using the same level estimate. The distinction becomes smaller in a pooled forecasting model. Daily reconstruction changes both the lagged predictors and the labels used to fit the trees. A smaller imputation error on one day need not translate into a smaller absolute error several days ahead. A planner choosing between the two histories would obtain different answers from the official-week signed bias, point WAPE and upper-quantile loss.
 
-\subsection{The metric the decision uses}
+The information calculation clarifies what additional records would make a precision statement interpretable. A known inventory cap distinguishes low counts exactly and groups the upper tail. An available-time fraction tells us how often a purchase can be seen, but an analyst must still specify how purchases arrive within the available hours. Releasing opening stock, replenishment times and a count-unit conversion would permit closer calibration of these two mechanisms. Without them, the contrast in Table 1 is informative precisely because both scenarios agree on the expected share of lost sales.
 
-WAPE is a scaled L1 loss, and L1 is minimised at the conditional median---so it
-scores the reconstruction where the order is \emph{not} placed. The order is placed
-at a high quantile, and the proper scoring rule for that is the pinball (quantile)
-loss \citep{koenker1978}. Scored with it, and normalised by total demand so the
-units match WAPE:
-
-\begin{table}[h]
-\centering\small
-\caption{Pinball loss by quantile, normalised by total demand. Parentheses are the
-change against sales-as-demand. One quantile-GBM fit per cell and one seed; the
-contrasts are much larger than the 0.4-WAPE resolution of the accuracy design, but
-a seed sweep of the quantile fits is not reported here.}
-\label{tab:pinball}
-\begin{tabular}{lrrr}
-\toprule
-method & $\tau=0.50$ & $\tau=0.90$ & $\tau=0.98$ \\
-\midrule
-sales as demand & 11.35 & 5.78 & 1.96 \\
-linear interpolation & 10.82 ($-4.7\%$) & 5.83 ($+0.9\%$) & 2.06 ($+5.3\%$) \\
-Tobit (severity) & \textbf{10.52} ($-7.3\%$) & \textbf{5.33} ($-7.8\%$) &
-\textbf{1.79} ($-8.7\%$) \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-Two things change relative to the WAPE ranking. First, linear interpolation is
-$-4.7\%$ at the median, $+0.9\%$ at $\tau=0.9$ and $+5.3\%$ at $\tau=0.98$: it
-\emph{degrades} exactly where the order is placed, so its apparent parity with the
-severity-weighted likelihood on WAPE is a median-metric artifact. Second, the
-reconstruction's value \emph{rises} with the quantile ($-7.3\%$, $-7.8\%$,
-$-8.7\%$)---the benefit is larger on the metric the decision uses than on the
-metric the field reports. That is the empirical counterpart of Proposition~5, and
-it sharpens the recommendation in \S7: if the order is placed at a high quantile,
-the reconstruction should be scored there.
-
-\subsection{Can pooling break the floor?}
-\label{sec:pooling}
-
-The bound is per-SKU, and the objection writes itself: a hierarchical estimator
-borrows strength across series, so the floor need not bind it. We test the
-objection rather than argue it.
-
-\begin{table}[h]
-\centering\small
-\caption{Level estimators in a simulation with known truth: 1{,}500 SKUs drawn from
-the panel's own level distribution, $k=60$, censoring from the panel's per-day
-severity pattern. The floor is the median Cram\'er--Rao bound of the same design
-(7.38\%).}
-\label{tab:pooling}
-\begin{tabular}{lrr}
-\toprule
-estimator of the level & relative RMSE & against the CR floor \\
-\midrule
-sales as demand (no correction) & 16.78\% & $2.27\times$ \\
-per-SKU severity-weighted Tobit & 7.84\% & $\mathbf{1.06\times}$ \\
-empirical-Bayes shrinkage (optimal weights) & 7.74\% & $1.05\times$ \\
-pure pooling (one level for every SKU) & 52.48\% & $7.11\times$ \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-Three things follow. First, the per-SKU estimator lands at $1.06\times$ the
-floor---the bound is not only valid but essentially attained, so at most 6\% of
-level precision is left to buy. Second, \emph{optimal} pooling is worth 0.1
-percentage points ($7.84\%\to7.74\%$): the between-SKU variance of levels is 16.7
-against a median within-SKU sampling variance of 0.018, three orders of magnitude
-apart, so the shrinkage weight on a SKU's own level is 0.9989---there is nothing to
-borrow. Third, \emph{naive} pooling is not a rescue but a catastrophe ($7.11\times$
-the floor): averaging across SKUs discards the heterogeneity that dominates the
-problem.
-
-The same intervention on the real pipeline is equally null. Shrinking each SKU's
-level by the log-scale empirical-Bayes factor (median change $+0.1\%$, range $-3\%$
-to $+1\%$) moves WAPE from 20.46 to 20.72 and bias from $-0.33\%$ to $-0.89\%$. The
-pre-registered kill rule---a pooled pipeline below 19.8 WAPE would have rewritten
-the scope claim---is not triggered.
-
-\emph{A caveat that stays.} This tests pooling of the \emph{level}, which is what
-the bound covers. A fully pooled model that learns demand \emph{shape} across SKUs,
-rather than each SKU's level, operates outside this bound and is not tested here.
-
-\section{What is not bounded}
-
-Under a 50:1 shortage-to-holding ratio, ordering at the newsvendor quantile
-$q^{*}\approx0.98$ instead of at the mean moves lost units from 6139 to 365
-($16.8\times$) for the naive pipeline, and from 5507 to 329 ($16.7\times$) once
-the history is de-censored; at a \emph{fixed} quantile the choice of
-reconstruction moves them by 10--21\%. The corner-to-corner number,
-$18.7\times$, combines the two moves, and the decomposition is worth keeping
-straight: the decision is worth an order of magnitude, the estimation inside it a
-tenth of that.
-
-\begin{table}[h]
-\centering\small
-\caption{Lost units against the ordering quantile. The policy and the 50:1 cost
-ratio are identical in every cell; reading down a column is the decision, reading
-across a row is the reconstruction.}
-\label{tab:quantile}
-\begin{tabular}{lrrr}
-\toprule
-ordering quantile & sales as demand & Tobit (severity) & NB (severity) \\
-\midrule
-0.50 (the mean) & 6139 & 5507 & 4864 \\
-0.90 & 1186 & 1025 & 848 \\
-0.95 & 669 & 608 & 533 \\
-0.98 (newsvendor) & 365 & \textbf{329} & 342 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\begin{figure}[t]
-\centering
-\includegraphics[width=.75\linewidth]{r4_quantile.png}
-\caption{Lost units against the ordering quantile. The curves are roughly
-parallel: the quantile sets the level, the reconstruction shifts it by a constant
-fraction.}
-\label{fig:quantile}
-\end{figure}
-
-Two readings of the grid matter. \emph{Down a column}, the quantile is worth
-14.2$\times$ to 16.8$\times$ in lost units. \emph{Across a row}, at a fixed
-quantile, the entire reconstruction question is worth 10--21\%, and at the
-newsvendor quantile 10\%. The decision dominates the estimation by an order of
-magnitude and---unlike the estimation---is not bounded by the information the
-censoring destroyed. That the point forecast is the wrong target under asymmetric
-cost is textbook \citep{gneiting2014,petropoulos2022,talluri2004}; what the
-information bound adds is the ratio between the two layers.
-
-\paragraph{Proposition 5 (the decision layer is first order, the estimation layer
-second).} Let $C(q)=c_h\E[(q-D)^+]+c_s\E[(D-q)^+]$ be the per-period newsvendor
-cost and $q^{*}=F^{-1}\big(c_s/(c_s+c_h)\big)$ its minimiser. For continuous $F$,
-$C'(q)=(c_h+c_s)F(q)-c_s$ and $C''(q)=(c_h+c_s)f(q)$, so $C'(q^{*})=0$ and a level
-error of relative size $\varepsilon$ costs
-\begin{equation}
-C\big(q^{*}(1+\varepsilon)\big)-C(q^{*})
-=\tfrac12(c_h+c_s)\,f(q^{*})\,(q^{*}\varepsilon)^2+o(\varepsilon^2),
-\end{equation}
-while moving the order point from the mean $\mu$ to $q^{*}$ changes the cost at
-first order. The estimation layer is second order in the level error; the decision
-layer is first order in the quantile gap. That is the analytic content of the ratio
-measured above.
-
-\paragraph{A worked evaluation at the median SKU.} With $\mu=3.22$, $k=60$ and
-$c_s/c_h=50$, $q^{*}=8$, $C(\mu)=37.4$ and $C(q^{*})=5.3$: a decision gain of
-$32.0$. A 7\% level error---the floor---costs $0.35$, so the decision is worth
-$92\times$ the price of the floor's level error. The quadratic scaling is confirmed
-numerically: the penalty at $\varepsilon=3.5\%,7\%,14\%,28\%$ is
-$0.17,0.35,0.73,1.72$, quadrupling when the error doubles. The local Taylor
-constant is $3.4\times$ smaller than the exact penalty because demand is integer
-and $C$ is piecewise linear with kinks at every unit; the scaling survives and the
-constant does not, so we report the exact figures and use the expansion only for
-the order statement.
-
-The two numbers count different objects and must not be added: the simulation's
-$18.7\times$ is a lost-units ratio under a multi-period $(s,S)$ policy, while the
-$92\times$ is a cost ratio in a single-period newsvendor at the median SKU. What
-they share is the ordering of the two layers---and that ordering is a theorem
-(Proposition 5), not a coincidence.
-
-\paragraph{Across the panel the ratio is larger, not smaller.} Repeating the
-evaluation for all 1{,}500 series ($\mu\ge1$; the optimal order point has median 8,
-p10--p90 6--11): the decision gain has median $32.0$, the cost of a 7\% level error
-has median $0.21$, and their ratio has median $\mathbf{158}$ (p10 98, p90 755).
-Every series in the panel has a ratio above 10. The median-SKU number above is
-therefore the conservative case, not a cherry-picked one: on this panel the
-decision layer is worth two orders of magnitude more than the floor's level error,
-and the ordering is never close.
-
-\section{Can the mask be optimised instead?}
-
-If censoring destroys information, the obvious response is to stock more and
-observe more. We test it in a Bayesian simulation: 300 SKUs, 30 weeks, NB2 demand
-with an unknown level, three policies---greedy (newsvendor quantile), dither
-(same mean inventory, $\pm40\%$ randomisation) and explore ($+1$ posterior
-sd)---against an inventory-matched greedy control.
-
-\begin{table}[h]
-\centering
-\small
-\caption{Posterior error after 30 weeks, fill rate and mean inventory.}
-\label{tab:dc}
-\begin{tabular}{lrrr}
-\toprule
-policy & posterior error & fill & mean inventory \\
-\midrule
-greedy $q=0.91$ & 21.1\% & 0.783 & 3.06 \\
-dither & 21.5\% & 0.731 & 3.00 \\
-explore & 16.3\% & 0.837 & 3.37 \\
-greedy $q=0.995$ (matched) & 17.1\% & 0.830 & 3.31 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-Randomisation at fixed inventory buys nothing, and once inventory is matched,
-exploration buys 0.8 pp. At scalar uncertainty, information gathering has no
-separate value: the lever \emph{is} the inventory level. The information cannot
-be cheaply bought back, which is why the bound in \S2 is a constraint rather than
-a modelling inconvenience.
-
-\section{What this changes}
-
-\textbf{Measure aggregate bias first.} It is the whole of the WAPE difference and
-it is cheap to compute from a clean holdout week. A pipeline that reports WAPE
-but not bias reports the bounded part and omits the unbounded one.
-
-\textbf{Correct it with the cheapest correct estimator.} The severity-weighted
-likelihood needs the stock-status log and fifteen seconds of CPU; it takes a
-$-7.1\%$ bias to $-0.3\%$. Deep imputation reaches $+2.1\%$ at three orders of
-magnitude more compute, with run-to-run variance larger than the remaining gap.
-
-\begin{figure}[t]
-\centering
-\includegraphics[width=.8\linewidth]{r6_deep_imputer.png}
-\caption{The arithmetic of the previous paragraph as a picture: the deep imputers
-cost 325--900\,s of CPU and land within 1.1 WAPE of a likelihood that costs
-15\,s, with a larger bias in every case (SAITS $+2.1\%$, ImputeFormer $+4.3\%$,
-a normalised TimesNet $-13.6\%$, against $-0.3\%$ for the severity-weighted
-Tobit). The vertical distance to the floor is noise; the horizontal distance is
-three orders of magnitude.}
-\label{fig:deep}
-\end{figure}
-
-Fig.~\ref{fig:deep} prices that trade. A team is entitled to spend three orders of
-magnitude of compute on two tenths of a WAPE point, but it should do so knowing
-that the reconstruction was never the expensive part of the problem, and that the
-bias it buys is larger in every deep case than the fifteen-second estimator's.
-
-\textbf{Spend the next dollar on the quantile.} No information bound applies to
-the ordering rule; it is worth 14.2--16.8$\times$ in lost units for a fixed
-estimator (16.8--18.7$\times$ if the history is de-censored too), against
-10--21\% for the entire reconstruction question.
-
-\textbf{Carry the 7\%.} The floor is a property of the data and is not removable,
-but it is small next to the 25\% daily variability that already drives safety
-stock. Per-SKU level uncertainty is a second-order term in inventory sizing, and
-should be acknowledged rather than modelled.
-
-\subsection{The ladder: censoring is a procurement decision}
-\label{sec:ladder}
-
-The bound is a property of the data rather than of the model, which turns
-de-censoring from a modelling question into a procurement one. What can be
-recovered is fixed by what is logged:
-
-\begin{table}[h]
-\centering\small
-\caption{What each rung of the logging ladder buys. Bias measured on the
-official holdout, scored on fully-stocked days.}
-\label{tab:ladder}
-\begin{tabular}{lll r}
-\toprule
-rung & you log & the correction you can justify & bias \\
-\midrule
-R0 & sales & nothing: the censoring is unidentifiable & unknown \\
-R1 & + a stock-out flag & the textbook censored likelihood & $+9.4$ to $+28.0\%$ \\
-R2 & + stock-out hours & severity-weighted likelihood & $-0.3\%$ \\
-R3 & + hourly sales & same, self-calibrated profile & $-0.3\%$ \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-R1 to R2 is one column in the warehouse system, and it is worth 10--28 points of
-bias---more than every modelling advance reported on this benchmark combined,
-this paper's included.
-
-\subsection{What the audit reports}
-
-The accompanying tool answers the three questions in the order they are asked:
-how censored is this table (rate, severity, effective days, the 7\% floor); what
-was demand (severity-weighted reconstruction, damped for the R1 case because a
-full correction over-shoots); and how much to order (the newsvendor quantile of
-the predictive distribution). It repairs the predictable failures of real
-exports---GBK encodings, renamed columns, duplicate rows, returns arriving as
-negative units---and distinguishes a day with no sale from a day with no record,
-which the usual pipeline silently conflates by writing a zero.
-
-\paragraph{Code and data.} The dataset is public (CC-BY-4.0). The audit tool,
-the estimators, the experiment scripts and every figure here reproduce from one
-command on a laptop CPU---no GPU, no training, twelve tests covering both the
-estimators and the data-repair layer.
-
-\section{Statistical protocol}
-
-Four decisions were fixed before the numbers were read; they are what the intervals
-below mean.
-
-\begin{enumerate}\itemsep2pt
-\item \textbf{Resampling unit.} The cluster bootstrap resamples \emph{series},
-not days: days inside a SKU share a level and are strongly dependent, so
-resampling days would understate every interval. 2{,}000 resamples, percentile
-intervals.
-\item \textbf{Paired comparisons.} Methods are compared on per-series
-absolute-error sums, paired across the same series; a paired bootstrap on the
-difference is more powerful than comparing two overlapping marginal intervals.
-Two of the 1{,}500 series have no fully-stocked holdout day and are excluded from
-the intervals, which moves point estimates by at most 0.12 WAPE.
-\item \textbf{A pre-specified family, Holm-corrected.} Five comparisons were named
-before the intervals were computed. All five survive Holm correction at
-$p\le0.005$ (Table~\ref{tab:paired}). The two severity-weighted likelihoods are
-0.12 WAPE apart with overlapping intervals, so we do not rank them.
-\item \textbf{Descriptive statistics stay descriptive.} The correlation of $0.94$
-is computed across eleven method-level points, not across the 10{,}500 holdout
-observations. It is not a test, and \S4 gives it no causal reading.
-\end{enumerate}
-
-\begin{table}[t]
-\centering\small
-\caption{Cluster-bootstrap 95\% intervals over 1{,}498 series; the point estimates
-differ from Table~\ref{tab:methods} by at most 0.12 WAPE because two series have
-no fully-stocked holdout day.}
-\label{tab:ci}
-\begin{tabular}{lrrrr}
-\toprule
-method & WAPE & 95\% CI & bias & 95\% CI \\
-\midrule
-sales as demand & 23.3 & 22.2--24.6 & $-7.2$ & $-8.4$--$-6.0$ \\
-linear interpolation & 21.1 & 20.0--22.2 & $+1.2$ & $+0.1$--$+2.4$ \\
-Kaplan--Meier (hard) & 28.6 & 26.8--30.7 & $+9.2$ & $+7.3$--$+11.4$ \\
-Tobit (hard) & 23.2 & 21.8--24.5 & $+10.5$ & $+9.0$--$+11.9$ \\
-negative binomial (hard) & 35.8 & 32.9--39.3 & $+27.9$ & $+24.7$--$+31.7$ \\
-Kaplan--Meier (severity) & 22.0 & 20.9--23.4 & $+3.1$ & $+1.8$--$+4.4$ \\
-Tobit (severity) & 20.4 & 19.3--21.5 & $-0.4$ & $-1.4$--$+0.6$ \\
-negative binomial (severity) & 20.3 & 19.3--21.3 & $+1.5$ & $+0.4$--$+2.6$ \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\begin{table}[t]
-\centering\small
-\caption{Paired cluster bootstrap over the same series; a negative $\Delta$WAPE
-means the first method is more accurate. Holm correction is over the pre-specified
-family of five.}
-\label{tab:paired}
-\begin{tabular}{lrrc}
-\toprule
-comparison & $\Delta$WAPE & 95\% CI & Holm $p$ \\
-\midrule
-KM severity $-$ KM hard & $-6.59$ & $-7.62$--$-5.71$ & 0.0025 \\
-Tobit severity $-$ sales as demand & $-2.95$ & $-3.38$--$-2.55$ & 0.0020 \\
-Tobit severity $-$ Tobit hard & $-2.78$ & $-3.36$--$-2.24$ & 0.0015 \\
-NB severity $-$ interpolation & $-0.81$ & $-1.23$--$-0.40$ & 0.0020 \\
-Tobit severity $-$ interpolation & $-0.69$ & $-1.12$--$-0.26$ & 0.0040 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-The smallest difference this design resolves at 95\% confidence is about 0.4 WAPE.
-Differences below that---including the 0.2-point gap between our estimator and the
-strongest imputer---should be read as ties, not as a ranking.
-
-\section{Threats to validity}
-
-\paragraph{Construct.} WAPE is not the decision cost. The paper keeps the two
-layers apart and derives the mapping between them (Proposition 5) instead of
-letting one stand for the other.
-
-\paragraph{Internal.} One split, seven holdout days, and no pre-registration
-beyond the four protocol decisions in \S8. The pipeline is deterministic given the
-seed and Table~\ref{tab:methods} reproduces exactly, but a different split would
-move the point estimates; the intervals in Table~\ref{tab:ci} are the honest
-statement of that uncertainty.
-
-\paragraph{External.} One benchmark, one country, one season (spring 2024), and a
-panel drawn from the heavy end of the catalogue. The long tail is absent, so the
-7\% floor is a lower bound for a real catalogue rather than a typical value, and
-the level dependence in \S3 must not be extrapolated to SKUs that sell a few units
-a week.
-
-\paragraph{Statistical.} Eleven methods are compared on 1{,}498 clusters with
-effects of the same order as the noise: the between-method spread among the honest
-methods is 1.1 WAPE, the within-model spread across four SAITS seeds is 1.0
-(Appendix~\ref{app:variance}). The Fisher calculation assumes the NB2 family; the
-dispersion sensitivity (0.374 at $k=10$ versus 0.334 as $k\to\infty$) says the
-bound is robust to that choice, but a zero-inflated demand process would shift the
-curve and is not tested here.
-
-\paragraph{Model and scope.} (A2) assumes the stock level is set by a policy
-rather than by the demand it faces; in this dataset availability is independent of
-any forecaster under test, but a deployment that sizes inventory from its own
-forecast breaks (A2). The bound is per-SKU, not pooled; \S\ref{sec:pooling} tests
-the pooled objection directly---the optimal shrinkage weight on a SKU's own level is
-0.9989, empirical Bayes buys 0.1 percentage points of level RMSE, and pure pooling
-is $7.11\times$ worse than the floor---so the ceiling is not an artifact of
-independent estimation. What remains open is a pooled model that learns demand
-\emph{shape}, which the bound does not cover. Lead time 3 days, cost ratio 50:1,
-no shelf life; the 90-day window cannot resolve annual seasonality; the
-dual-control test is a simulation, not a field experiment.
+Three features constrain generalization. First, the evaluation observes realized demand most clearly on stocked days. Busy days that sell out may have different arrival patterns, and substitution or customer deferral can affect even fully stocked sales. Artificial masking recovers known hourly totals under independent reassignment; external validity for naturally missing transactions remains open. Second, both forecasting windows cover adjacent weeks in one high-volume sample design. Resampling stores or products exposes cross-sectional heterogeneity but cannot capture new seasons, pricing regimes or product launches. The 77 distinct products in the official panel also explain why product-based intervals can be substantially wider. Third, the inventory replay starts with policy-specific stock, uses censored sales as a demand proxy and omits spoilage. It identifies mechanical trade-offs in a given scenario. Operational savings would require a longer decision horizon and an independently validated demand measure.
 
 \section{Conclusions}
 
-A censored day carries a fraction of a clean day's information, and on the
-FreshRetailNet-50K benchmark that fraction is worth a quarter of the 90-day window:
-67.8 effective days, a 7.0\% Cram\'er--Rao floor, and an accuracy ceiling near
-20 WAPE. Eleven methods, including two deep imputers and a zero-shot foundation
-model, sit on or above that ceiling; what separates them is bias, not precision,
-and the bias is removable in fifteen seconds of CPU. The decision layer is not
-bounded the same way: the order point is worth 14--17$\times$ in lost units, and the
-floor's own level error is a second-order cost at that point. We also closed the two
-ways the claim could have failed: no honest method has gone below the floor, and
-optimal pooling---tested, not assumed---is worth 0.1 percentage points because
-between-SKU heterogeneity dwarfs sampling error. The practical instruction is to
-log one more column (stock-out hours) and to spend the next dollar on the ordering
-quantile rather than on reconstruction.
+The timing of a stockout helped estimate the sales hidden by a known interruption. On days with observed hourly truth, a volume-weighted correction lowered reconstruction WAPE by 1.45 points relative to counting unavailable hours. Reconstructing the training history also improved on raw-sales forecasting in two consecutive weeks, while the ranking relative to interpolation depended on the week. For demand-level inference, a stockout log supports a range of precision estimates conditional on the unit scale and observation model. Reporting these assumptions alongside reconstruction error, signed bias and the loss relevant to ordering gives each result a testable interpretation.
 
-\appendix
-\section{The controlled simulator}
-\label{app:sim}
+\section*{Data and reproducibility}
 
-Forty SKUs over 420 days are drawn from a negative-binomial level process with a
-lognormal scale, a linear trend, weekly and annual sinusoids and 2\% promotion
-spikes. Censoring is generated by a daily-review $(s,S)$ policy with a 3-day lead
-time, sized on true demand so availability is independent of any forecaster under
-test. E1 sweeps the cover; E2 resizes the policy each week from the method's own
-forecast; E3 injects a $+35\%$ level shift at day 380 and freezes the forecaster
-at day 300.
+FreshRetailNet-50K is distributed by Dingdong-Inc under CC BY 4.0 \cite{ref2,ref7}. The accompanying replication archive provides the analysis programs, environment versions, input hashes and full numerical outputs, including all city and category contrasts. The analyses use the public training and evaluation files. Only store--product records and aggregate sales enter the analysis.
 
-\section{Run-to-run variance of the deep imputer}
-\label{app:variance}
+\textbf{Use of generative AI.} OpenAI Codex assisted with manuscript revision, checking mathematical expressions, preparing analysis code and organizing results.
 
-The four SAITS runs quoted in Table~\ref{tab:methods} use one configuration and
-four seeds:
+\begin{thebibliography}{10}\small\setlength{\itemsep}{2pt}\setlength{\parskip}{0pt}
 
-\begin{table}[h]
-\centering\small
-\caption{One SAITS configuration, four seeds.}
-\label{tab:seeds}
-\begin{tabular}{lrr}
-\toprule
-run & WAPE & bias \\
-\midrule
-seed 0 & 20.70 & $+0.0\%$ \\
-seed 1 & 21.46 & $+1.7\%$ \\
-seed 2 & 21.64 & $+2.7\%$ \\
-seed 3 & 21.70 & $+4.1\%$ \\
-\bottomrule
-\end{tabular}
-\end{table}
+\bibitem{ref1} Nahmias, S. Demand estimation in lost sales inventory systems. \emph{Naval Research Logistics} 1994, 41, 739--757.
 
-The within-model range (1.0 WAPE) is the same size as the between-method spread of
-the honest methods (1.1). This is why Table~\ref{tab:methods} carries the
-inventory columns and bias instead of a leaderboard rank: at one run, at this
-resolution, the ranking is not stable, and a paper that reports only the rank is
-reporting noise.
+\bibitem{ref2} Wang, Y.; Gu, J.; Long, L.; Li, X.; Shen, L.; Fu, Z.; Zhou, X.; Jiang, X. FreshRetailNet-50K: A stockout-annotated censored demand dataset for latent demand recovery and forecasting in fresh retail. \emph{arXiv} 2025, 2505.16319. \url{https://doi.org/10.48550/arXiv.2505.16319}
 
-A second reproducibility note: the full pipeline (Table~\ref{tab:methods}, the
-quantile grid of \S5 and every figure) runs in 300\,s on a laptop CPU with no GPU
-and no training, and twelve tests cover the estimators and the data-repair layer.
-In a shell that forbids named pipes---some sandboxes do---the run needs
-\texttt{JOBLIB\_MULTIPROCESSING=0} and fits serially at about twice the
-wall-clock time.
+\bibitem{ref3} Azar, J. A reproducible, leakage-free pipeline for censored demand forecasting and inventory optimization on FreshRetailNet-50K. \emph{Inventions} 2026, 11, 89. \url{https://doi.org/10.3390/inventions11050089}
 
-\section{Proofs}
-\label{app:proofs}
+\bibitem{ref4} Yin, C.; Zheng, Y.; Kong, Z. Demand hidden by stockouts: Censored demand recovery and green waste-reduction forecasting for sustainable fresh-food consumption under emerging-market urbanization. \emph{Sustainability} 2026, 18, 7642. \url{https://doi.org/10.3390/su18157642}
 
-\paragraph{Proposition 1.} Write $\E[\min(D,c)]=c-\E[(c-D)^+]$. Both terms are
-continuous in $c$ and the second is non-increasing, so the difference is continuous
-and non-decreasing; it tends to $\E[D]=\mu$ as $c\to\infty$, and its right
-derivative is $P(D\ge c)$, positive wherever the support carries mass above $c$. A
-continuous non-decreasing function from $[0,\infty)$ onto $[0,\mu)$ therefore
-attains every value $(1-s)\mu$ with $s\in(0,1)$, uniquely except on flat segments,
-where the value is attained at the left endpoint. \hfill$\square$
+\bibitem{ref5} Louis, T.A. Finding the observed information matrix when using the EM algorithm. \emph{Journal of the Royal Statistical Society, Series B} 1982, 44, 226--233. \url{https://doi.org/10.1111/j.2517-6161.1982.tb01203.x}
 
-\paragraph{Proposition 2.} For independent observations with densities
-differentiable in $\mu$, the joint score is the sum of the individual scores and the
-cross terms in its variance vanish under independence (A1), so
-$I_n(\mu)=\sum_t I(c_t,\mu)$. Each day contributes $I(c_t,\mu)=\rho(s_t)I_1(\mu)$ by
-the definition of $\rho$, with $c_t$ recovered from the recorded severity by
-Proposition 1. Summing gives $I_n=I_1(\mu)\sum_t\rho(s_t)$.
-\hfill$\square$
+\bibitem{ref6} Lehmann, E.L.; Casella, G. \emph{Theory of Point Estimation}, 2nd ed. Springer, New York, 1998. \url{https://doi.org/10.1007/b98854}
 
-\paragraph{Proposition 3.} Lowering the cap from $c$ to $c'<c$ maps
-$Y_c=\min(D,c)$ deterministically to $Y_{c'}=\min(Y_c,c')$: a garbling of the
-observation, many-to-one wherever $P(D\ge c)>0$. By the data-processing inequality
-for statistical experiments a garbling cannot raise Fisher information, so
-$I(c',\mu)\le I(c,\mu)$ and $\rho$ is non-increasing in severity, strictly so where
-the garbling is non-invertible on a set of positive probability.
-\hfill$\square$
+\bibitem{ref7} Dingdong-Inc. \emph{FreshRetailNet-50K}, version 1.0. Dataset and data dictionary, 2025. \url{https://huggingface.co/datasets/Dingdong-Inc/FreshRetailNet-50K}
 
-\paragraph{Proposition 4.} With $p=\hat\mu$, $\E[p]=\mu$ and
-$\mathrm{Var}(p)=(\delta\mu)^2$,
-$\mathrm{Var}(D-p)=\E[\mathrm{Var}(D\mid\mu)]+\mathrm{Var}(p)=(c\mu)^2+(\delta\mu)^2$,
-which is $(c\mu)^2$ at $\delta=0$. The standard deviation---and, for a
-location--scale family, the mean absolute deviation exactly---therefore inflates by
-$\sqrt{1+(\delta/c)^2}$. \hfill$\square$
+\bibitem{ref8} Tobin, J. Estimation of relationships for limited dependent variables. \emph{Econometrica} 1958, 26, 24--36. \url{https://doi.org/10.2307/1907382}
 
-\paragraph{Proposition 5.} $C'(q)=(c_h+c_s)F(q)-c_s$ and
-$C''(q)=(c_h+c_s)f(q)>0$, so $C'(q^{*})=0$ with
-$q^{*}=F^{-1}\big(c_s/(c_h+c_s)\big)$. Taylor's theorem at $q^{*}$, with
-$q=q^{*}(1+\varepsilon)$, gives
-$C(q)-C(q^{*})=\tfrac12C''(q^{*})(q^{*}\varepsilon)^2+o(\varepsilon^2)$. For integer
-demand $C$ is piecewise linear and the expansion is an order statement only; \S5
-reports the exact penalties. \hfill$\square$
+\bibitem{ref9} Koenker, R.; Bassett, G. Regression quantiles. \emph{Econometrica} 1978, 46, 33--50. \url{https://doi.org/10.2307/1913643}
 
-\section*{Data availability}
-FreshRetailNet-50K \citep{wang2025} is public under CC-BY-4.0 and distributed on
-Hugging Face as \texttt{train.parquet} and \texttt{eval.parquet}; we add no new
-data. The official evaluation split (2024-06-26 to 2024-07-02) is used as the
-holdout and is never touched by model selection, threshold choice or figure
-revision.
+\bibitem{ref10} Gneiting, T. Making and evaluating point forecasts. \emph{Journal of the American Statistical Association} 2011, 106, 746--762. \url{https://doi.org/10.1198/jasa.2011.r10138}
 
-\section*{Code availability}
-The audit tool, estimators, experiment scripts and every figure are in
-\url{https://github.com/yushi250412015/unconstrain} under the MIT licence.
-\texttt{python -m unconstrain --data real --series 1500} reproduces
-Tables~\ref{tab:methods} and \ref{tab:quantile} and Figures~1--7 in 300\,s on a
-laptop CPU, and twelve tests cover the estimators and the data-repair layer. In a
-shell that forbids named pipes, prefix the run with
-\texttt{JOBLIB\_MULTIPROCESSING=0}.
-
-\section*{Reproducibility}
-Every empirical number in the paper is written by the pipeline to a JSON file in
-\texttt{results/} (\texttt{theory.json}, \texttt{panel\_theory.json},
-\texttt{severity\_ablation.json}); the tables and the text quote only those files,
-and no number is typed by hand.
-
-\section*{Author contributions (CRediT)}
-[First Author]: Conceptualization, Methodology, Software, Formal analysis,
-Investigation, Writing---original draft. [Co-author]: [roles to be completed].
-
-\section*{Competing interests}
-The author(s) declare no competing interests.
-
-\section*{Funding}
-This research received no specific grant from any funding agency.
-
-\section*{Acknowledgements}
-[To be completed: advisor, department and reviewers.]
-
-\bibliographystyle{plainnat}
-\bibliography{refs}
-
-\end{document}
+\end{thebibliography}\end{document}

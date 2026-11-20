@@ -15,8 +15,8 @@ single event. Its Fisher information about the level ``mu`` is
 and the ratio ``rho = I / I(c=inf)`` is the fraction of a clean day's
 information that survives. ``n`` censored days are worth ``n * rho`` clean ones,
 and the Cramer-Rao bound turns that into a floor on the standard error of any
-unbiased level estimate. No imputer, transformer or foundation model can go
-below it: they all see the same censored data.
+unbiased level estimate. The bound concerns an unbiased mean estimate in the specified count
+experiment; prediction loss and pooled estimators require different analyses.
 """
 
 from __future__ import annotations
@@ -53,18 +53,22 @@ def fisher_clean(mu: float, k: float, y_max: int | None = None) -> float:
 
 def fisher_censored(c: float, mu: float, k: float) -> float:
     """Fisher information of one observation censored at ``c``."""
-    ys = np.arange(0, int(c))
-    if ys.size == 0:
-        ys = np.array([], dtype=int)
-    out = 0.0
-    if ys.size:
-        p = nbinom.pmf(ys, k, _p(mu, k))
-        d = _d(lambda yy, m, kk: logpmf(yy, m, kk), ys, mu, k)
-        out += float(np.sum(p * d ** 2))
-    surv = nbinom.sf(c - 1, k, _p(mu, k))          # P(D >= c)
-    dsf = _d(lambda yy, m, kk: logsf(yy - 1, m, kk), np.array([c]), mu, k)[0]
-    out += float(surv * dsf ** 2)
-    return out
+    if np.isposinf(c):
+        return fisher_clean(mu, k)
+    # D is integer. min(D, 2.4) reveals D=2 exactly and groups D>=3.
+    first_pooled = int(np.ceil(c))
+    if first_pooled <= 0:
+        return 0.0
+    variance = mu + mu**2 / k
+    p = _p(mu, k)
+    ys = np.arange(first_pooled)
+    exact = np.sum(nbinom.pmf(ys, k, p) * ((ys - mu) / variance)**2)
+    tail = nbinom.sf(first_pooled - 1, k, p)
+    if tail == 0.0:
+        return float(exact)
+    tail_moment = mu * nbinom.sf(first_pooled - 2, k + 1, p)
+    tail_score_sum = (tail_moment - mu * tail) / variance
+    return float(exact + tail_score_sum**2 / tail)
 
 
 def threshold_for_severity(mu: float, k: float, s: float) -> float:
@@ -73,6 +77,8 @@ def threshold_for_severity(mu: float, k: float, s: float) -> float:
     Solves E[min(D, c)] = (1 - s) mu, i.e. the policy implied by the observed
     severity in the data.
     """
+    if s >= 1:
+        return 0.0
     if s <= 0:
         return np.inf
     lo, hi = 0.0, mu + 12 * np.sqrt(mu + mu ** 2 / k) + 20
@@ -102,7 +108,7 @@ def se_bound(mu: float, k: float, s: float, n_days: int) -> float:
     The bound is for a *scale* parameter, so it is reported as a relative error.
     """
     info = n_days * retention(mu, k, s) * fisher_clean(mu, k)
-    return float(1.0 / np.sqrt(max(info, 1e-12)) / mu)
+    return float(1.0 / np.sqrt(info) / mu) if info > 0 else np.inf
 
 
 if __name__ == "__main__":
