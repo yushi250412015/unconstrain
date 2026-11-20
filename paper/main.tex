@@ -481,6 +481,52 @@ metric the field reports. That is the empirical counterpart of Proposition~5, an
 it sharpens the recommendation in \S7: if the order is placed at a high quantile,
 the reconstruction should be scored there.
 
+\subsection{Can pooling break the floor?}
+\label{sec:pooling}
+
+The bound is per-SKU, and the objection writes itself: a hierarchical estimator
+borrows strength across series, so the floor need not bind it. We test the
+objection rather than argue it.
+
+\begin{table}[h]
+\centering\small
+\caption{Level estimators in a simulation with known truth: 1{,}500 SKUs drawn from
+the panel's own level distribution, $k=60$, censoring from the panel's per-day
+severity pattern. The floor is the median Cram\'er--Rao bound of the same design
+(7.38\%).}
+\label{tab:pooling}
+\begin{tabular}{lrr}
+\toprule
+estimator of the level & relative RMSE & against the CR floor \\
+\midrule
+sales as demand (no correction) & 16.78\% & $2.27\times$ \\
+per-SKU severity-weighted Tobit & 7.84\% & $\mathbf{1.06\times}$ \\
+empirical-Bayes shrinkage (optimal weights) & 7.74\% & $1.05\times$ \\
+pure pooling (one level for every SKU) & 52.48\% & $7.11\times$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Three things follow. First, the per-SKU estimator lands at $1.06\times$ the
+floor---the bound is not only valid but essentially attained, so at most 6\% of
+level precision is left to buy. Second, \emph{optimal} pooling is worth 0.1
+percentage points ($7.84\%\to7.74\%$): the between-SKU variance of levels is 16.7
+against a median within-SKU sampling variance of 0.018, three orders of magnitude
+apart, so the shrinkage weight on a SKU's own level is 0.9989---there is nothing to
+borrow. Third, \emph{naive} pooling is not a rescue but a catastrophe ($7.11\times$
+the floor): averaging across SKUs discards the heterogeneity that dominates the
+problem.
+
+The same intervention on the real pipeline is equally null. Shrinking each SKU's
+level by the log-scale empirical-Bayes factor (median change $+0.1\%$, range $-3\%$
+to $+1\%$) moves WAPE from 20.46 to 20.72 and bias from $-0.33\%$ to $-0.89\%$. The
+pre-registered kill rule---a pooled pipeline below 19.8 WAPE would have rewritten
+the scope claim---is not triggered.
+
+\emph{A caveat that stays.} This tests pooling of the \emph{level}, which is what
+the bound covers. A fully pooled model that learns demand \emph{shape} across SKUs,
+rather than each SKU's level, operates outside this bound and is not tested here.
+
 \section{What is not bounded}
 
 Under a 50:1 shortage-to-holding ratio, ordering at the newsvendor quantile
@@ -779,13 +825,14 @@ curve and is not tested here.
 \paragraph{Model and scope.} (A2) assumes the stock level is set by a policy
 rather than by the demand it faces; in this dataset availability is independent of
 any forecaster under test, but a deployment that sizes inventory from its own
-forecast breaks (A2). The bound is per-SKU, not pooled: every published
-de-censoring method reconstructs each series independently, so the bound applies to
-the paradigm being compared, and a pooled estimator could in principle sit below
-it---the one direction in which the ceiling claim could be overturned by a method
-rather than by a leak. Lead time 3 days, cost ratio 50:1, no shelf life; the
-90-day window cannot resolve annual seasonality; the dual-control test is a
-simulation, not a field experiment.
+forecast breaks (A2). The bound is per-SKU, not pooled; \S\ref{sec:pooling} tests
+the pooled objection directly---the optimal shrinkage weight on a SKU's own level is
+0.9989, empirical Bayes buys 0.1 percentage points of level RMSE, and pure pooling
+is $7.11\times$ worse than the floor---so the ceiling is not an artifact of
+independent estimation. What remains open is a pooled model that learns demand
+\emph{shape}, which the bound does not cover. Lead time 3 days, cost ratio 50:1,
+no shelf life; the 90-day window cannot resolve annual seasonality; the
+dual-control test is a simulation, not a field experiment.
 
 \appendix
 \section{The controlled simulator}

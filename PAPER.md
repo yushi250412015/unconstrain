@@ -375,6 +375,42 @@ metric the decision uses than on the metric the field reports. That is the empir
 counterpart of Proposition 5, and it sharpens the recommendation in §7: if the order
 is placed at a high quantile, the reconstruction should be scored there.
 
+### 4.2 Can pooling break the floor?
+
+The bound is per-SKU, and the objection writes itself: a hierarchical estimator
+borrows strength across series, so the floor need not bind it. We test the
+objection rather than argue it.
+
+| estimator of the level | relative RMSE | against the CR floor |
+|---|---|---|
+| sales as demand (no correction) | 16.78% | 2.27× |
+| per-SKU severity-weighted Tobit | 7.84% | **1.06×** |
+| empirical-Bayes shrinkage (optimal weights) | 7.74% | 1.05× |
+| pure pooling (one level for every SKU) | 52.48% | 7.11× |
+
+*Simulation with known truth: 1,500 SKUs drawn from the panel's own level
+distribution, $k=60$, censoring from the panel's per-day severity pattern; the
+floor is the median Cramér–Rao bound of the same design (7.38%).*
+
+Three things follow. First, the per-SKU estimator lands at **1.06×** the floor —
+the bound is not only valid but essentially attained, so at most 6% of level
+precision is left to buy. Second, **optimal pooling is worth 0.1 percentage
+points** (7.84% → 7.74%): the between-SKU variance of levels is 16.7 against a
+median within-SKU sampling variance of 0.018, three orders of magnitude apart, so
+the shrinkage weight on a SKU's own level is 0.9989 — there is nothing to borrow.
+Third, **naive pooling is not a rescue but a catastrophe** (7.11× the floor):
+averaging across SKUs discards the heterogeneity that dominates the problem.
+
+The same intervention on the real pipeline is equally null. Shrinking each SKU's
+level by the log-scale empirical-Bayes factor (median change +0.1%, range −3% to
++1%) moves WAPE from 20.46 to 20.72 and bias from −0.33% to −0.89%. The
+pre-registered kill rule — a pooled pipeline below 19.8 WAPE would have rewritten
+the scope claim — is not triggered.
+
+*A caveat that stays.* This tests pooling of the *level*, which is what the bound
+covers. A fully pooled model that learns demand *shape* across SKUs, rather than
+each SKU's level, operates outside this bound and is not tested here.
+
 ## 5. What moves cost
 
 Under a 50:1 shortage-to-holding ratio, ordering at the newsvendor quantile
@@ -616,11 +652,13 @@ under test, but a real deployment that sizes inventory from its own forecast bre
 time 3 days, cost ratio 50:1, no shelf life; the 90-day window cannot resolve
 annual seasonality.
 
-**Scope of the bound.** Per-SKU, not pooled (the remark under A1–A5). Every
-published de-censoring method reconstructs each series independently, so the bound
-applies to the paradigm being compared; a pooled estimator could in principle sit
-below it, and that is the one direction in which the ceiling claim could be
-overturned by a method rather than by a leak.
+**Scope of the bound.** Per-SKU, not pooled (the remark under A1–A5). §4.2 tests
+the pooled objection directly: the optimal shrinkage weight on a SKU's own level is
+0.9989, empirical Bayes buys 0.1 percentage points of level RMSE, and pure pooling
+is 7.11× worse than the floor. The ceiling is therefore not an artifact of
+independent estimation — the one direction in which it could have been overturned
+by a method has been closed empirically, and what remains open is a pooled model
+that learns demand *shape*, which the bound does not cover.
 
 ## Appendix A. Run-to-run variance of the deep imputer
 
