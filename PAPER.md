@@ -660,6 +660,22 @@ independent estimation — the one direction in which it could have been overtur
 by a method has been closed empirically, and what remains open is a pooled model
 that learns demand *shape*, which the bound does not cover.
 
+## 10. Conclusions
+
+A censored day carries a fraction of a clean day's information, and on the
+FreshRetailNet-50K benchmark that fraction is worth a quarter of the 90-day window:
+67.8 effective days, a 7.0% Cramér–Rao floor, and an accuracy ceiling near 20 WAPE.
+Eleven methods, including two deep imputers and a zero-shot foundation model, sit
+on or above that ceiling; what separates them is bias, not precision, and the bias
+is removable in fifteen seconds of CPU. The decision layer is not bounded the same
+way: the order point is worth 14–17× in lost units, and the floor's own level error
+is a second-order cost at that point. We also closed the two ways the claim could
+have failed: no honest method has gone below the floor, and optimal pooling —
+tested, not assumed — is worth 0.1 percentage points because between-SKU
+heterogeneity dwarfs sampling error. The practical instruction is to log one more
+column (stock-out hours) and to spend the next dollar on the ordering quantile
+rather than on reconstruction.
+
 ## Appendix A. Run-to-run variance of the deep imputer
 
 The four SAITS runs quoted in Table 1 use one configuration and four seeds:
