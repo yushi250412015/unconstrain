@@ -1,0 +1,33 @@
+{
+ "panel_newsvendor": {
+  "n": 1500,
+  "qstar_median": 8.0,
+  "gain_median": 32.03792838988643,
+  "penalty_median": 0.20637707851082343,
+  "ratio_median": 158.09474801798063,
+  "ratio_p10": 98.08741803334014,
+  "ratio_p90": 755.1679579706912,
+  "share_ratio_gt10": 1.0,
+  "share_ratio_gt100": 0.8793333333333333
+ },
+ "pinball": [
+  {
+   "method": "sales",
+   "pinball_0.5": 11.3515398615,
+   "pinball_0.9": 5.7757712149,
+   "pinball_0.98": 1.9593108613
+  },
+  {
+   "method": "interp",
+   "pinball_0.5": 10.8175107263,
+   "pinball_0.9": 5.8265172198,
+   "pinball_0.98": 2.0630043042
+  },
+  {
+   "method": "tobit_s",
+   "pinball_0.5": 10.5212962727,
+   "pinball_0.9": 5.3251567404,
+   "pinball_0.98": 1.7895767438
+  }
+ ]
+}

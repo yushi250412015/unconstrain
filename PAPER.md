@@ -1,4 +1,4 @@
-# De-censoring Has a Ceiling, and It Is Low: an information bound for censored retail demand
+﻿# De-censoring Has a Ceiling, and It Is Low: an information bound for censored retail demand
 
 *Draft v4 — submission candidate, content freeze 2026-11-20. Numbers reproduce from `python -m unconstrain --data real --series 1500` (add `JOBLIB_MULTIPROCESSING=0` in a shell that forbids named pipes); twelve tests cover the estimators and the data-repair layer.*
 
@@ -66,6 +66,24 @@ The last row is the one to keep in view: the field has already noticed that
 recovery does not buy accuracy. What it has not done is compute how much accuracy
 was ever there to buy. That is the whole claim, and §4 states the two ways it can
 be falsified.
+
+**Lineage, and what is new.** The arithmetic is not new. The relative efficiency
+of a censored sample against a complete one is the classical Fisher-information
+calculation (Lehmann & Casella, 1998), and the censored likelihoods compared here
+are Tobin's and Kaplan–Meier's (1958). Reading a stock-out as *coarse* data
+rather than as missing data is also established: a censored day is a coarsening of
+the demand variable, and the ignorability theory for coarse data (Heitjan & Rubin,
+1991) is precisely the garbling that Proposition 3 invokes; the lifetime-data
+treatment of censored likelihoods is standard (Lawless, 2003). What is new is the
+*accounting*, not the algebra: (i) the quantity is computed on this benchmark and
+turned into a ladder of logging rungs whose next step is worth 10–28 points of
+bias; (ii) the same level error is priced twice — second order in newsvendor cost,
+first order through the ordering quantile (Proposition 5) — which separates the
+two layers by an order of magnitude; and (iii) the ceiling is stated as a
+falsifiable prediction, so a method that beats the floor is more likely to be
+leaking the holdout than to be informative. A reader who knows the classical
+literature should read the contribution as a measurement plus a decision-theoretic
+reading, not as a new estimator.
 
 ## 2. How much information a censored day carries
 
@@ -304,6 +322,33 @@ The run-to-run noise is of the same size as the effect: SAITS scored 20.70,
 comparable to the within-model spread (1.0). Ranking methods on one run of this
 benchmark is not informative at the resolution the literature reports.
 
+### 4.1 The metric the decision uses
+
+WAPE is a scaled L1 loss, and L1 is minimised at the conditional median — so it
+scores the reconstruction where the order is *not* placed. The order is placed at a
+high quantile, and the proper scoring rule for that is the pinball (quantile) loss
+(Koenker & Bassett, 1978). Scored with it, and normalised by total demand so the
+units match WAPE:
+
+| method | pinball τ=0.50 | τ=0.90 | τ=0.98 |
+|---|---|---|---|
+| sales as demand | 11.35 | 5.78 | 1.96 |
+| linear interpolation | 10.82 (−4.7%) | 5.83 (+0.9%) | 2.06 (+5.3%) |
+| Tobit (severity) | **10.52 (−7.3%)** | **5.33 (−7.8%)** | **1.79 (−8.7%)** |
+
+*One quantile-GBM fit per cell and one seed; the contrasts are much larger than the
+0.4-WAPE resolution of the accuracy design, but a seed sweep of the quantile fits
+is not reported here.*
+
+Two things change relative to the WAPE ranking. First, linear interpolation is
+−4.7% at the median, +0.9% at τ=0.9 and **+5.3% at τ=0.98**: it *degrades* exactly
+where the order is placed, so its apparent parity with the severity-weighted
+likelihood on WAPE is a median-metric artifact. Second, the reconstruction's value
+*rises* with the quantile (−7.3%, −7.8%, −8.7%) — the benefit is larger on the
+metric the decision uses than on the metric the field reports. That is the empirical
+counterpart of Proposition 5, and it sharpens the recommendation in §7: if the order
+is placed at a high quantile, the reconstruction should be scored there.
+
 ## 5. What moves cost
 
 Under a 50:1 shortage-to-holding ratio, ordering at the newsvendor quantile
@@ -363,6 +408,15 @@ The two numbers count different things and must not be added: the simulation's
 18.7× is a lost-units ratio under a multi-period $(s,S)$ policy, while the 92× is a
 cost ratio in a single-period newsvendor at the median SKU. What they share is the
 ordering of the two layers — and that ordering is a theorem, not a coincidence.
+
+**Across the panel the ratio is larger, not smaller.** Repeating the evaluation for
+all 1,500 series (μ≥1; the optimal order point has median 8, p10–p90 6–11): the
+decision gain has median **32.0**, the cost of a 7% level error has median
+**0.21**, and their ratio has median **158** (p10 98, p90 755). Every series in the
+panel has a ratio above 10. The median-SKU number above is therefore the
+conservative case, not a cherry-picked one: on this panel the decision layer is
+worth two orders of magnitude more than the floor's level error, and the ordering
+is never close.
 
 ## 6. Can the mask be optimised instead?
 
@@ -608,7 +662,11 @@ demand $C$ is piecewise linear and the expansion is an order statement only;
 - Azar, J. (2026). A Reproducible, Leakage-Free Pipeline for Censored Demand Forecasting and Inventory Optimization on FreshRetailNet-50K. Inventions, 11(5), 89.
 - Chen, M., & Jin, J. (2025). Stockout-Aware Relational Demand Forecasting and Cross-Dataset Error Trade-offs. JTIE, 4(1), 325–346.
 - Du, S., et al. (2023). SAITS. Expert Systems with Applications.
+- Heitjan, D. F., & Rubin, D. B. (1991). Ignorability and Coarse Data. Annals of Statistics, 19(4), 2244-2253.
 - Kaplan, E. L., & Meier, P. (1958). Nonparametric Estimation from Incomplete Observations. JASA.
+- Koenker, R., & Bassett, G. (1978). Regression Quantiles. Econometrica, 46(1), 33-50.
+- Lawless, J. F. (2003). Statistical Models and Methods for Lifetime Data (2nd ed.). Wiley.
+- Lehmann, E. L., & Casella, G. (1998). Theory of Point Estimation (2nd ed.). Springer.
 - Nahmias, S. (1994). Demand Estimation in Lost Sales Inventory Systems. Naval Research Logistics.
 - Nie, T., et al. (2024). ImputeFormer. KDD.
 - Talluri, K. T., & van Ryzin, G. J. (2004). The Theory and Practice of Revenue Management. Springer.
@@ -617,3 +675,4 @@ demand $C$ is piecewise linear and the expansion is an order statement only;
 - Wang, Y., et al. (2025). FreshRetailNet-50K. arXiv:2505.16319.
 - Wu, H., et al. (2023). TimesNet. ICLR.
 - Yin, C., Zheng, Y., & Kong, Z. (2026). Demand Hidden by Stockouts. Sustainability, 18(15), 7642.
+
