@@ -164,6 +164,18 @@ The information calculation clarifies what additional records would make a preci
 
 Three features constrain generalization. First, the evaluation observes realized demand most clearly on stocked days. Busy days that sell out may have different arrival patterns, and substitution or customer deferral can affect even fully stocked sales. Artificial masking recovers known hourly totals under independent reassignment; external validity for naturally missing transactions remains open. Second, both forecasting windows cover adjacent weeks in one high-volume sample design. Resampling stores or products exposes cross-sectional heterogeneity but cannot capture new seasons, pricing regimes or product launches. The 77 distinct products in the official panel also explain why product-based intervals can be substantially wider. Third, the inventory replay starts with policy-specific stock, uses censored sales as a demand proxy and omits spoilage. It identifies mechanical trade-offs in a given scenario. Operational savings would require a longer decision horizon and an independently validated demand measure.
 
+### 5.1 A minimal reporting standard
+
+The contrast in Table 1 suggests a reporting convention. A claim that a level estimate has a relative standard error of 3% is not reproducible unless three choices travel with it: the observation mechanism, the count unit behind the released sales scale, and the dispersion of the count distribution. Table 5 applies the convention three times to the same hourly records, the same series and the same availability patterns; the entries differ by 15 effective days and 4.2 percentage points of relative standard error while describing one panel. Because the public release does not identify the count unit, the table reports the range the data permit rather than a point value. The convention costs one line per claim, and it separates a measurement from a number.
+
+Table 5. The same panel under three stated assumptions. Effective days and lower bounds on relative standard error are medians over 1,500 series, as in Table 1.
+
+| Mechanism | Count unit | Size k | Effective days | RSE bound (%) |
+|---|---|---|---|---|
+| Daily cap | 1 | 60 | 75.98 | 6.65 |
+| Daily cap | 10 | 60 | 63.89 | 2.78 |
+| Independent thinning | 10 | 60 | 79.22 | 2.48 |
+
 ## 6. Conclusions
 
 The timing of a stockout helped estimate the sales hidden by a known interruption. On days with observed hourly truth, a volume-weighted correction lowered reconstruction WAPE by 1.45 points relative to counting unavailable hours. Reconstructing the training history also improved on raw-sales forecasting in two consecutive weeks, while the ranking relative to interpolation depended on the week. For demand-level inference, a stockout log supports a range of precision estimates conditional on the unit scale and observation model. Reporting these assumptions alongside reconstruction error, signed bias and the loss relevant to ordering gives each result a testable interpretation.
